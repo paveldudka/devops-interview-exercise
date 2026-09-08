@@ -31,8 +31,9 @@ unproven.
 5. `terraform test` proves the module rejects tags and bare image names
    (see [`infra/tests/immutable_image.tftest.hcl`](infra/tests/immutable_image.tftest.hcl)).
 
-All checks are visible and static; there are no hidden tests. Job, step, output,
-and variable names are yours to choose. [docs/architecture.md](docs/architecture.md)
+All checks are visible; there are no hidden tests. The workflow checks are
+static and the Terraform check runs against a mocked provider. Job, step,
+output, and variable names are yours to choose. [docs/architecture.md](docs/architecture.md)
 describes what the checks can observe and what they cannot prove.
 
 ## Boundaries
