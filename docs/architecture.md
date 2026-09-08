@@ -2,45 +2,55 @@
 
 ## What is modeled
 
-The repository models only the release decision boundary:
+Only the release decision boundary:
 
-- a GitHub Actions workflow builds and promotes a worker image;
-- a Terraform module renders an ECS Fargate task definition and service; and
-- external infrastructure is supplied through variables.
+- a GitHub Actions workflow that builds and promotes a worker image;
+- a Terraform module that renders an ECS Fargate task definition and service; and
+- external infrastructure supplied through variables.
 
 The VPC, ECS cluster, IAM roles, ECR repository, load balancer, and DNS are
-intentionally absent. They do not contribute useful signal to this exercise.
+intentionally absent. They add no signal to this exercise.
 
 ## What is mocked
 
 Terraform's native `mock_provider "aws"` replaces provider behavior during
-`terraform test`. The workflow is parsed and evaluated by visible local policy
-tests. Neither path authenticates to AWS, reads AWS data sources, maintains state,
-or applies resources. `exercise/release.yml` is outside `.github/workflows`, so
-GitHub never registers or executes it.
+`terraform test`. Nothing authenticates to AWS, reads AWS data sources, keeps
+state, or applies resources. `exercise/release.yml` lives outside
+`.github/workflows`, so GitHub never registers or runs it, and `example.invalid`
+never resolves.
 
-## Starter baseline
+## How the local checks work
 
-Before candidate changes, the baseline checks provide evidence that:
+`make baseline` proves the starter is well-formed and safe to hand out:
+Terraform validates, actionlint and ruff pass, the mocked module renders the
+image reference it is given, the fixture has no automatic trigger, and the
+repository holds no credential-shaped values. It also runs the checks of the
+checker in `tests/test_release_policy.py`, which pin down what the acceptance
+policy accepts and rejects.
 
-- the Terraform configuration is syntactically and structurally valid;
-- the task definition receives the image reference supplied to the module;
-- the release fixture cannot be executed automatically; and
-- the repository contains no credential-shaped values.
+`make acceptance` is a static policy over `exercise/release.yml` plus one
+Terraform test. The policy in `tests/release_policy.py`:
 
-## Solution acceptance
+- parses the workflow and treats every `terraform apply` as a deployment,
+  identifying its environment from the tfvars file it passes or the job's
+  GitHub environment;
+- finds the `image_ref` value each deployment passes (as a `-var` or through
+  `TF_VAR_image_ref`) and traces it through workflow expressions, `env`, and job
+  and step outputs defined in the file. Values produced at runtime, such as
+  variables written to `GITHUB_ENV`, are opaque to it;
+- counts image builds, compares the traced references, and inspects job
+  ordering, run conditions, error handling, and concurrency settings for the
+  observable properties listed in `CANDIDATE.md`.
 
-After the exercise is solved, the acceptance checks provide evidence that one
-digest-derived build output is passed to both Terraform deployment commands,
-production waits for staging, production releases are serialized, common
-failure-swallowing patterns are absent, and the Terraform input rejects mutable
-image references. These are static policy checks, not a deployment simulation.
+It does not care what jobs, steps, outputs, or variables are called, or how
+many jobs exist.
 
-## What the tests cannot prove
+## What the checks cannot prove
 
-These local checks do not prove that AWS permissions are correct, an ECS rollout
-will stabilize, health checks reflect application readiness, the container runs,
-or rollback is safe under real traffic. A production rollout still needs an
-isolated staging deployment, observability, bounded waits, failure handling, and
-a tested rollback procedure. Candidates should call out this boundary rather
-than representing a mocked plan as deployment proof.
+Static checks cannot prove that an image is actually pushed, that a recorded
+digest matches the pushed manifest, that AWS permissions are correct, that an
+ECS rollout stabilizes, that health checks reflect application readiness, that
+the container runs, or that rollback is safe under real traffic. A production
+rollout still needs an isolated staging deployment, observability, bounded
+waits, failure handling, and a rehearsed rollback. Call out this boundary rather
+than presenting a mocked plan as deployment proof.

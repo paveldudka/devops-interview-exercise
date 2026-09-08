@@ -20,7 +20,8 @@ make acceptance
 
 `make baseline` must pass on the starter branch. `make acceptance` is expected to
 fail until the exercise is solved; every acceptance check is visible in
-`tests/test_release_acceptance.py` and `infra/tests/immutable_image.tftest.hcl`.
+`tests/release_policy.py`, `tests/test_release_acceptance.py`, and
+`infra/tests/immutable_image.tftest.hcl`.
 
 See [docs/architecture.md](docs/architecture.md) for the test boundary and
 mocking model.
