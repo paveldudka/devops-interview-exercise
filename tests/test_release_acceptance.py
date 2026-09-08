@@ -1,9 +1,10 @@
 """Visible acceptance checks. Each one fails on the starter for one unsafe property.
 
-The checks are static: see docs/architecture.md for what they observe and
-what they cannot prove.
+The workflow checks are static and the Terraform check runs against a mocked
+provider: see docs/architecture.md for what they observe and cannot prove.
 """
 
+import re
 import subprocess
 from pathlib import Path
 from typing import Any
@@ -66,7 +67,15 @@ def test_terraform_rejects_mutable_image_references() -> None:
             check=False,
             capture_output=True,
             text=True,
+            timeout=300,
         )
     except FileNotFoundError:
         pytest.fail("terraform is missing; run this exercise in the devcontainer")
-    assert result.returncode == 0, result.stdout + result.stderr
+    except subprocess.TimeoutExpired:
+        pytest.fail("terraform test did not finish within 300 seconds")
+    output = result.stdout + result.stderr
+    assert result.returncode == 0, output
+    summary = re.search(r"(\d+) passed, 0 failed", result.stdout)
+    assert summary and int(summary.group(1)) >= 3, (
+        f"expected the three supplied run blocks to pass:\n{output}"
+    )
