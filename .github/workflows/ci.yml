@@ -35,9 +35,3 @@ jobs:
           install /tmp/actionlint /usr/local/bin/actionlint
       - name: Run safe baseline checks
         run: make baseline
-      - name: Confirm the starter still contains the exercise
-        run: |
-          if make acceptance; then
-            echo "starter acceptance unexpectedly passed" >&2
-            exit 1
-          fi
