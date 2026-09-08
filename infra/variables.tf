@@ -9,8 +9,13 @@ variable "execution_role_arn" {
 }
 
 variable "image_ref" {
-  description = "Container image reference to deploy."
+  description = "Digest-qualified container image reference to deploy."
   type        = string
+
+  validation {
+    condition     = can(regex("^[^[:space:]@]+@sha256:[0-9a-f]{64}$", var.image_ref))
+    error_message = "image_ref must be an immutable repository@sha256 digest."
+  }
 }
 
 variable "security_group_ids" {
