@@ -19,17 +19,22 @@ tests. Neither path authenticates to AWS, reads AWS data sources, maintains stat
 or applies resources. `exercise/release.yml` is outside `.github/workflows`, so
 GitHub never registers or executes it.
 
-## What the tests prove
+## Starter baseline
 
-The tests provide evidence that:
+Before candidate changes, the baseline checks provide evidence that:
 
 - the Terraform configuration is syntactically and structurally valid;
 - the task definition receives the image reference supplied to the module;
-- mutable image references are rejected by the module;
-- one build output is passed unchanged to staging and production;
-- production depends on successful staging;
-- production releases are serialized rather than cancelled mid-deployment; and
-- common failure-swallowing patterns are absent.
+- the release fixture cannot be executed automatically; and
+- the repository contains no credential-shaped values.
+
+## Solution acceptance
+
+After the exercise is solved, the acceptance checks provide evidence that one
+digest-derived build output is passed to both Terraform deployment commands,
+production waits for staging, production releases are serialized, common
+failure-swallowing patterns are absent, and the Terraform input rejects mutable
+image references. These are static policy checks, not a deployment simulation.
 
 ## What the tests cannot prove
 

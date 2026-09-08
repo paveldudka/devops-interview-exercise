@@ -13,7 +13,8 @@ the exact artifact tested in staging and that releases fail safely.
 
 The workflow is an inactive fixture, not a registered GitHub Actions workflow.
 All AWS behavior is mocked. Do not add credentials, a remote backend, or a real
-deployment.
+deployment. `example.invalid` is deliberately fictional: author the build, push,
+and deployment steps, but do not execute them during the interview.
 
 ## Acceptance criteria
 
@@ -26,9 +27,15 @@ deployment.
 5. Ensure build or deployment failures cannot be ignored while promotion
    continues.
 6. Keep the developer workflow and implementation straightforward.
+7. Make the Terraform module reject tags and bare image names; it should accept
+   only digest-qualified image references.
 
-All executable checks are visible. They verify outcomes and a few documented
-workflow contracts; there are no hidden tests.
+All executable checks are visible; there are no hidden tests. To keep static
+validation deterministic, retain one staging job, one production job, and a
+single producer for a job output named `image_ref`. Both deployment jobs must
+pass that output to their `terraform apply` command. The tests accept either
+shell-based Docker builds or `docker/build-push-action`, scalar or mapped GitHub
+environments, and equivalent safe concurrency policies.
 
 ## Timing
 
@@ -51,8 +58,9 @@ make acceptance   # expected to fail before your changes
 make check        # baseline plus acceptance; should pass when finished
 ```
 
-You may change `exercise/release.yml`, `infra/`, and supporting documentation or
-tests when justified. Do not move the release fixture into `.github/workflows/`.
+You may change `exercise/release.yml`, `infra/`, and supporting documentation.
+You may add tests, but do not weaken or remove the supplied checks. Do not move
+the release fixture into `.github/workflows/`.
 
 ## AI and documentation policy
 

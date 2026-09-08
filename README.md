@@ -5,9 +5,7 @@ AWS ECS release process operationally safe. It is intentionally small, synthetic
 and fully local: **no AWS account, credentials, backend, state, or infrastructure
 are used**.
 
-Candidates should start with [CANDIDATE.md](CANDIDATE.md). Interviewers should use
-the separately maintained reference branch and must not share the canonical
-repository with candidates.
+Start with [CANDIDATE.md](CANDIDATE.md).
 
 ## Quick start
 
