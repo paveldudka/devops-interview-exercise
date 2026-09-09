@@ -315,14 +315,14 @@ test "$(git -C "${snapshot_dir}" rev-list --all)" \
 Verify the tree contains none of the confidential evaluator or solution files:
 
 ```bash
-for path in \
+for candidate_path in \
   .interviewer \
   tests/release_policy.py \
   tests/test_release_acceptance.py \
   tests/test_release_policy.py \
   infra/tests/immutable_image.tftest.hcl
 do
-  test ! -e "${snapshot_dir}/${path}"
+  test ! -e "${snapshot_dir}/${candidate_path}"
 done
 ! grep -Eq '^(acceptance|check):' "${snapshot_dir}/Makefile"
 ! grep -q 'sha256' "${snapshot_dir}/infra/variables.tf"
