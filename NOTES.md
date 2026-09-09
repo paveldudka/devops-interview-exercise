@@ -43,6 +43,8 @@ health gates, then exercise the path in an isolated environment with telemetry.
 
 ## AI and documentation use
 
-AI assistance helped draft and review this synthetic reference. Suggestions were
-checked against the reference-only evaluator and local commands; the author
-remains accountable for the final code and documented boundaries.
+The assessment and prioritization were completed without AI. AI assistance was
+used only during implementation to draft and review this synthetic reference.
+Suggestions were checked against the reference-only evaluator and local
+commands; the author remains accountable for the final code and documented
+boundaries.

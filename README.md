@@ -2,8 +2,8 @@
 
 This private repository contains a 75-minute live exercise centered on reviewing
 and improving a proposed AWS ECS release process. It is intentionally small,
-synthetic, and fully local: **no AWS account, credentials, backend, state, or
-infrastructure are used**.
+synthetic, and fully local: **local validation uses no AWS account, credentials,
+backend, state, or infrastructure**.
 
 Start with [CANDIDATE.md](CANDIDATE.md).
 

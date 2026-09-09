@@ -10,24 +10,31 @@ repository whose only branch is the neutral candidate starter commit.
 1. Generate an isolated candidate repository using the procedure below.
 2. Ask the candidate to open its devcontainer and run `make verify-env` before
    the interview. Do not start the timer until the environment is ready.
-3. Confirm screen sharing. Remind them that AI and documentation are allowed
-   during assessment and implementation; the final walkthrough is AI-free.
-4. Keep this guide and the reference branch out of shared screens and chat.
+3. Confirm screen sharing. Remind them that assessment, the interviewer twist,
+   and the final walkthrough are AI-free. AI and public documentation are
+   allowed only during implementation.
+4. During orientation, explain that the surrounding platform supplies a runner
+   with the required tools, working registry and AWS authentication, registry
+   access, Terraform initialization, and remote state. These prerequisites work
+   as intended and are outside scope. Do not use them to volunteer findings.
+5. Keep this guide and the reference branch out of shared screens and chat.
 
 ## Facilitation script (75 minutes)
 
-- **0–15 — assessment and prioritization:** Ask the candidate to inspect the
-  proposal and record material findings in `NOTES.md`, ranked by priority with
-  impact and repository evidence. Have them explain the ranking before they
-  start implementation. Do not volunteer planted findings or steer them toward
-  the reference design before this assessment is captured.
-- **15–50 — one focused improvement:** The candidate selects and implements one
-  improvement. Observe whether the choice follows from their assessment, whether
-  it addresses a material risk, and how they control scope and gather evidence.
-  They are not expected to identify or fix everything.
-- **50–60 — requirement/incident twist:** “Rollback must redeploy the previously
-  promoted artifact without rebuilding it. Show or explain the smallest change
-  you would make.” Code is optional if the base task consumed the time.
+- **0–15 — AI-free assessment and prioritization:** Ask the candidate to inspect
+  the proposal and record material findings in `NOTES.md`, ranked by priority
+  with impact and repository evidence. Have them explain the ranking before
+  they start implementation. Do not volunteer planted findings or steer them
+  toward the reference design before this assessment is captured.
+- **15–50 — implementation (AI/docs allowed):** The candidate selects and
+  implements one focused improvement. Observe whether the choice follows from
+  their assessment, whether it addresses a material risk, and how they control
+  scope and gather evidence. They are not expected to identify or fix
+  everything.
+- **50–60 — AI-free requirement/incident twist:** “Rollback must redeploy the
+  previously promoted artifact without rebuilding it. Show or explain the
+  smallest change you would make.” Code is optional if the base task consumed
+  the time.
 - **60–75 — AI-free defense:** Ask them to stop AI use and defend their
   assessment, chosen priority, diff, validation evidence, rollout, rollback,
   residual risks, and next step.
@@ -262,23 +269,90 @@ timing has been established yet.
 
 ## Safe per-candidate repository copy
 
-Use an opaque candidate identifier. Never fork the canonical repository and
-never push the reference branch. From a clean temporary directory:
+Use an opaque candidate identifier. Never fork, clone into the destination, or
+share the canonical repository: even a single-branch clone carries reachable
+starter history containing earlier answer material. Instead, export the current
+candidate tree and create a new repository with one unrelated root commit.
+
+From a trusted local checkout of the canonical repository:
 
 ```bash
-git clone --single-branch --branch pasha/build-interview-exercise \
-  git@github.com:paveldudka/devops-interview-exercise.git candidate-repo
-cd candidate-repo
-git remote remove origin
-git branch -M main
-gh repo create paveldudka/devops-interview-<opaque-id> \
-  --private --source=. --remote=origin
-git push --set-upstream origin main
-git ls-remote --heads origin
+canonical_repo=/absolute/path/to/devops-interview-exercise
+candidate_ref=origin/pasha/build-interview-exercise
+candidate_id=<opaque-id>
+snapshot_dir="$(mktemp -d)"
+
+git -C "${canonical_repo}" fetch --prune origin
+candidate_sha="$(git -C "${canonical_repo}" rev-parse "${candidate_ref}^{commit}")"
+git -C "${canonical_repo}" archive "${candidate_sha}" | tar -x -C "${snapshot_dir}"
+
+git -C "${snapshot_dir}" init -b main
+git -C "${snapshot_dir}" add --all
+git -C "${snapshot_dir}" \
+  -c user.name='TinyFish Recruiting' \
+  -c user.email='recruiting@tinyfish.io' \
+  commit -m 'Initialize DevOps interview exercise'
+
+gh repo create "paveldudka/devops-interview-${candidate_id}" \
+  --private --source="${snapshot_dir}" --remote=origin
+git -C "${snapshot_dir}" push --set-upstream origin main
 ```
 
-Verify the final command lists only `refs/heads/main`, repository visibility is
-private, and none of the following exists in the candidate copy:
+Before granting access, verify the destination is private, exposes only `main`,
+and has exactly one reachable commit which is also its only root:
+
+```bash
+gh repo view "paveldudka/devops-interview-${candidate_id}" \
+  --json visibility --jq '.visibility == "PRIVATE"'
+test "$(git -C "${snapshot_dir}" ls-remote --heads origin | awk '{print $2}')" \
+  = 'refs/heads/main'
+test "$(git -C "${snapshot_dir}" rev-list --all --count)" -eq 1
+test "$(git -C "${snapshot_dir}" rev-list --max-parents=0 --all --count)" -eq 1
+test "$(git -C "${snapshot_dir}" rev-list --all)" \
+  = "$(git -C "${snapshot_dir}" rev-parse HEAD)"
+```
+
+Verify the tree contains none of the confidential evaluator or solution files:
+
+```bash
+for path in \
+  .interviewer \
+  tests/release_policy.py \
+  tests/test_release_acceptance.py \
+  tests/test_release_policy.py \
+  infra/tests/immutable_image.tftest.hcl
+do
+  test ! -e "${snapshot_dir}/${path}"
+done
+! grep -Eq '^(acceptance|check):' "${snapshot_dir}/Makefile"
+! grep -q 'sha256' "${snapshot_dir}/infra/variables.tf"
+grep -q 'Complete this file during the exercise' "${snapshot_dir}/NOTES.md"
+```
+
+Finally, prove that no old solution/evaluator blob from the canonical reference
+is reachable in the snapshot. The exact path list includes files whose candidate
+and solution versions share a name:
+
+```bash
+test -z "$(
+  comm -12 \
+    <(git -C "${canonical_repo}" ls-tree -r --format='%(objectname)' \
+      origin/pasha/reference-solution -- \
+      .interviewer tests/release_policy.py tests/test_release_acceptance.py \
+      tests/test_release_policy.py infra/tests/immutable_image.tftest.hcl \
+      exercise/release.yml infra/variables.tf NOTES.md | sort -u) \
+    <(git -C "${snapshot_dir}" rev-list --objects --all | \
+      awk '{print $1}' | sort -u)
+)"
+```
+
+The single-root checks prove that no old canonical commit is reachable; the
+object intersection check proves that known answer-key blobs are not reachable.
+If any verification fails, delete the destination repository before granting
+access and rebuild it from a fresh snapshot. Never “fix” the destination by
+deleting branches alone.
+
+The candidate tree must not contain:
 
 - `.interviewer/`;
 - `tests/release_policy.py`;
@@ -289,6 +363,6 @@ private, and none of the following exists in the candidate copy:
 - the solved workflow, immutable Terraform validation, or completed reference
   notes.
 
-Grant access only to the candidate and assigned interviewers. Archive or delete
-the candidate copy according to the recruiting retention policy after the loop
-closes.
+Grant access only to the candidate and assigned interviewers after all checks
+pass. Archive or delete the candidate copy according to the recruiting retention
+policy after the loop closes.
