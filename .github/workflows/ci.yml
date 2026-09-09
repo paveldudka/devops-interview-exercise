@@ -33,5 +33,5 @@ jobs:
             | sha256sum --check
           tar -xzf /tmp/actionlint.tar.gz -C /tmp actionlint
           install /tmp/actionlint /usr/local/bin/actionlint
-      - name: Run safe baseline checks
+      - name: Run baseline checks
         run: make baseline

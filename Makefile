@@ -22,6 +22,7 @@ baseline: init format-check
 	@terraform -chdir=infra test -filter=tests/baseline.tftest.hcl
 	@python -m pytest -q -m baseline
 
+# Confidential evaluator targets; these do not exist on the candidate branch.
 acceptance: init
 	@python -m pytest -q -m acceptance
 
