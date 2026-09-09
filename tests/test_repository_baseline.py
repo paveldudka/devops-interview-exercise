@@ -6,6 +6,12 @@ import yaml
 
 
 ROOT = Path(__file__).resolve().parents[1]
+ACTIVE_WORKFLOW_COMMAND = re.compile(
+    r"\b(?:terraform(?:\s+-\S+)*\s+apply|docker\s+(?:image\s+)?push|"
+    r"aws\s+ecs\s+(?:update-service|register-task-definition)|"
+    r"kubectl\s+(?:apply|rollout)|helm\s+(?:install|upgrade))\b",
+    re.IGNORECASE,
+)
 
 
 @pytest.mark.baseline
@@ -13,6 +19,20 @@ def test_release_fixture_is_not_an_active_workflow() -> None:
     fixture = (ROOT / "exercise" / "release.yml").resolve()
     active_workflows = (ROOT / ".github" / "workflows").resolve()
     assert active_workflows not in fixture.parents
+
+
+@pytest.mark.baseline
+def test_only_repository_validation_is_an_active_workflow() -> None:
+    workflows = ROOT / ".github" / "workflows"
+    active_files = sorted(
+        path.relative_to(workflows)
+        for path in workflows.rglob("*")
+        if path.is_file() and path.suffix in {".yaml", ".yml"}
+    )
+    assert active_files == [Path("ci.yml")]
+
+    validation = (workflows / "ci.yml").read_text(encoding="utf-8")
+    assert ACTIVE_WORKFLOW_COMMAND.search(validation) is None
 
 
 @pytest.mark.baseline

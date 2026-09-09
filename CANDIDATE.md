@@ -20,8 +20,12 @@ communication—not the number of findings or lines changed.
   surrounding network, cluster, IAM, and registry infrastructure already exist
   and are supplied as variables.
 - The release workflow is an inactive fixture outside `.github/workflows/`.
-- Everything runs locally with a mocked Terraform provider. There is no AWS
+- Local validation uses a mocked Terraform provider. It does not access an AWS
   account, credential, remote backend, state, or live deployment.
+- For this exercise, assume the surrounding platform provides a runner with the
+  required tools, working registry and AWS authentication, registry access,
+  Terraform initialization, and remote state. Those platform capabilities work
+  as intended and are outside the assessment scope.
 
 See [docs/architecture.md](docs/architecture.md) for the model and validation
 boundaries.
@@ -43,7 +47,7 @@ credentials, a remote backend, or a real deployment path.
 
 ## Timing (75 minutes)
 
-- 15 minutes: assess the proposal and prioritize your findings.
+- 15 minutes: assess the proposal and prioritize your findings without AI.
 - 35 minutes: implement and validate one focused improvement.
 - 10 minutes: respond to an additional change or scenario from the interviewer.
 - 15 minutes: AI-free walkthrough and defense.
@@ -59,16 +63,18 @@ make baseline    # check formatting, syntax, and the local model boundaries
 ```
 
 The baseline must remain green. You may add your own focused tests and should
-explain their evidence and limitations. There is no hidden automated pass/fail
-gate for a preferred solution; interviewer-only evaluator checks are evidence
-aids, not a hidden contract.
+explain their evidence and limitations. If your improvement deliberately
+tightens an interface, you may update the relevant supplied test fixture and
+explain why. There is no hidden automated pass/fail gate for a preferred
+solution.
 
 ## AI and documentation policy
 
-You may use AI tools and public documentation during the assessment and
-implementation phases. Record in `NOTES.md` what you used, notable suggestions
-you accepted or rejected, and how you verified them. You are accountable for
-every submitted line, and the final walkthrough is AI-free.
+The initial 15-minute assessment and prioritization phase is AI-free. You may use
+AI tools and public documentation during the 35-minute implementation phase
+only. Record in `NOTES.md` what you used, notable suggestions you accepted or
+rejected, and how you verified them. You are accountable for every submitted
+line. The interviewer change and final walkthrough are also AI-free.
 
 ## Submission
 

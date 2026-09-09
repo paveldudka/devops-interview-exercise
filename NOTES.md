@@ -33,4 +33,4 @@ evidence that supports your assessment.
 
 ## AI and documentation use
 
-<!-- Tools and sources used; suggestions accepted/rejected; how you verified them. -->
+<!-- During implementation: tools and sources used; suggestions accepted/rejected; how you verified them. -->

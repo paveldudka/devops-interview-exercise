@@ -12,6 +12,8 @@ jobs:
       - uses: actions/checkout@v4
       - name: Build staging image
         run: docker build -t example.invalid/interview-worker:latest .
+      - name: Publish staging image
+        run: docker push example.invalid/interview-worker:latest
       - name: Deploy staging
         continue-on-error: true
         run: terraform -chdir=infra apply -auto-approve -var-file=staging.tfvars -var='image_ref=example.invalid/interview-worker:latest'
@@ -22,7 +24,9 @@ jobs:
     needs: deploy_staging
     steps:
       - uses: actions/checkout@v4
-      - name: Build production image again
+      - name: Build production image
         run: docker build -t example.invalid/interview-worker:latest .
+      - name: Publish production image
+        run: docker push example.invalid/interview-worker:latest
       - name: Deploy production
         run: terraform -chdir=infra apply -auto-approve -var-file=production.tfvars -var='image_ref=example.invalid/interview-worker:latest' || true
