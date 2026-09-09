@@ -2,22 +2,35 @@
 
 Complete this file during the exercise.
 
-## Approach
+## Prioritized assessment
 
-<!-- What did you change, and why is it the smallest practical change? -->
+For each material risk, record its priority, potential impact, and the repository
+evidence that supports your assessment.
+
+| Priority | Risk | Impact | Evidence |
+| --- | --- | --- | --- |
+|  |  |  |  |
+
+## Chosen improvement and rationale
+
+<!-- What did you choose to improve, and why is it the best use of the time? -->
+
+## Implementation
+
+<!-- Summarize the change and any important design decisions or tradeoffs. -->
 
 ## Validation
 
-<!-- Which commands did you run, and what did they prove? -->
+<!-- What did you run or inspect? What does that prove, and what can it not prove? -->
 
 ## Rollout and rollback
 
-<!-- How would you introduce this safely? How would you roll back? -->
+<!-- How would you introduce this change safely? How would you reverse it? -->
 
-## Residual risks
+## Residual risks and next steps
 
-<!-- What is not proved locally or remains risky? -->
+<!-- What remains, and what would you address next? -->
 
 ## AI and documentation use
 
-<!-- Tools used; important suggestions accepted/rejected; how you verified them. -->
+<!-- Tools and sources used; suggestions accepted/rejected; how you verified them. -->

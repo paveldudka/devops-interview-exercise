@@ -1,6 +1,6 @@
-name: Unsafe ECS release exercise
+name: ECS worker release
 
-# This is an inactive fixture. It intentionally lives outside .github/workflows.
+# This fixture is inactive because it lives outside .github/workflows.
 on:
   workflow_dispatch:
 

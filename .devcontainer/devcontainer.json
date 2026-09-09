@@ -1,5 +1,5 @@
 {
-  "name": "safe-ecs-release-exercise",
+  "name": "ecs-release-review",
   "build": {
     "dockerfile": "Dockerfile",
     "args": {

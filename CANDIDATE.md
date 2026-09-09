@@ -2,82 +2,80 @@
 
 ## The task
 
-[`exercise/release.yml`](exercise/release.yml) releases a worker to AWS ECS
-through staging and then production. A recent release passed staging, yet
-production ran different application bytes. Make the smallest coherent change to
-the release workflow and the Terraform module in `infra/` so that production
-only ever receives the exact artifact staging validated, any failure stops
-promotion, production changes never run concurrently, and Terraform refuses an
-image reference that is not immutable. Validate the change locally and be ready
-to explain how you would roll it out, how you would roll back, and what remains
-unproven.
+This repository models a proposed AWS ECS release process. Assess whether it is
+ready for production, document and prioritize the material risks you find, then
+implement one focused improvement you believe delivers the most value. Validate
+your change and explain your rollout and rollback approach, the risks that
+remain, and what you would address next.
 
-## What the starter does today
+You are not expected to find or fix every issue. We evaluate the quality of your
+judgment, prioritization and rationale, implementation, validation, and
+communication—not the number of findings or lines changed.
 
-- builds the container separately for staging and for production;
-- deploys a mutable image reference to both;
-- can carry on after a failed command; and
-- lets two production releases run at the same time.
+## System context
 
-## Outcomes the checks verify
+- [`exercise/release.yml`](exercise/release.yml) models a GitHub Actions release
+  of a worker through staging and production.
+- [`infra/`](infra/) models the relevant ECS task definition and service. The
+  surrounding network, cluster, IAM, and registry infrastructure already exist
+  and are supplied as variables.
+- The release workflow is an inactive fixture outside `.github/workflows/`.
+- Everything runs locally with a mocked Terraform provider. There is no AWS
+  account, credential, remote backend, state, or live deployment.
 
-`make acceptance` fails on the starter and passes once all of these hold:
+See [docs/architecture.md](docs/architecture.md) for the model and validation
+boundaries.
 
-1. One release builds the image once.
-2. Staging and production deploy the same immutable reference to that image.
-3. Production starts only after staging succeeded, and no failure along the way
-   can be ignored.
-4. A second production release waits for the first and never cancels it.
-5. `terraform test` proves the module rejects tags and bare image names
-   (see [`infra/tests/immutable_image.tftest.hcl`](infra/tests/immutable_image.tftest.hcl)).
+## Deliverables
 
-All checks are visible; there are no hidden tests. The workflow checks are
-static and the Terraform check runs against a mocked provider. Job, step,
-output, and variable names are yours to choose. [docs/architecture.md](docs/architecture.md)
-describes what the checks can observe and what they cannot prove.
+1. Use [`NOTES.md`](NOTES.md) to record and prioritize the material risks you
+   find. Include impact and repository evidence for each finding.
+2. Choose one focused improvement, explain why it is the best use of the
+   implementation time, and implement it.
+3. Validate your change. Explain what your checks prove and what they cannot
+   prove.
+4. Describe how you would roll the change out, roll it back, and address the
+   most important residual risks.
 
-## Boundaries
-
-- The workflow is an inactive fixture. Keep it outside `.github/workflows/`.
-- Everything is mocked. Add no credentials, remote backend, or real deployment.
-  `example.invalid` never resolves: author build, push, and deploy steps, but do
-  not run them.
-- You may change `exercise/release.yml`, `infra/`, and `NOTES.md`, and add
-  tests. Do not weaken or remove the supplied checks.
-- Prefer a small, explainable change over breadth.
+You may change `exercise/release.yml`, `infra/`, and `NOTES.md`, and may add
+focused tests or supporting code. Keep the workflow inactive and do not add AWS
+credentials, a remote backend, or a real deployment path.
 
 ## Timing (75 minutes)
 
-- 10 minutes: read the repository and ask questions.
-- 40 minutes: implement and validate.
-- 10 minutes: respond to an additional requirement from the interviewer.
+- 15 minutes: assess the proposal and prioritize your findings.
+- 35 minutes: implement and validate one focused improvement.
+- 10 minutes: respond to an additional change or scenario from the interviewer.
 - 15 minutes: AI-free walkthrough and defense.
 
-## Setup and commands
+## Setup and baseline
 
-Use the included devcontainer (Docker plus a devcontainer-capable editor or CLI
-are the only host prerequisites; setup takes under 10 minutes).
+Use the included devcontainer. Docker plus a devcontainer-capable editor or CLI
+are the only host prerequisites; initial setup should take under 10 minutes.
 
 ```bash
-make verify-env   # confirm the pinned tools are available
-make baseline     # must stay green
-make acceptance   # fails on the starter
-make check        # baseline plus acceptance; passes when you are done
+make verify-env  # confirm the supported toolchain is available
+make baseline    # check formatting, syntax, and the local model boundaries
 ```
+
+The baseline must remain green. You may add your own focused tests and should
+explain their evidence and limitations. There is no hidden automated pass/fail
+gate for a preferred solution; interviewer-only evaluator checks are evidence
+aids, not a hidden contract.
 
 ## AI and documentation policy
 
-You may use AI tools and public documentation while implementing. Record in
-`NOTES.md` which tools you used, notable suggestions you accepted or rejected,
-and how you verified them. You are accountable for every submitted line, and the
-final walkthrough is AI-free.
+You may use AI tools and public documentation during the assessment and
+implementation phases. Record in `NOTES.md` what you used, notable suggestions
+you accepted or rejected, and how you verified them. You are accountable for
+every submitted line, and the final walkthrough is AI-free.
 
 ## Submission
 
 Commit your changes and be ready to show:
 
-- the diff;
-- output from `make check`;
-- `NOTES.md` with approach, validation, rollout, rollback, residual risks, and
-  AI use; and
-- anything incomplete, plus the assumptions you made.
+- your prioritized assessment in `NOTES.md`;
+- the focused implementation and its rationale;
+- the validation you ran and its limits;
+- your rollout, rollback, residual risks, and next steps; and
+- any incomplete work or assumptions.

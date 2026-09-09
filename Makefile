@@ -1,7 +1,7 @@
 SHELL := /bin/bash
 .SHELLFLAGS := -eu -o pipefail -c
 
-.PHONY: verify-env init format-check baseline acceptance check
+.PHONY: verify-env init format-check baseline
 
 verify-env:
 	@./scripts/verify-env.sh
@@ -21,8 +21,3 @@ baseline: init format-check
 	@test -f infra/tests/baseline.tftest.hcl
 	@terraform -chdir=infra test -filter=tests/baseline.tftest.hcl
 	@python -m pytest -q -m baseline
-
-acceptance: init
-	@python -m pytest -q -m acceptance
-
-check: baseline acceptance
