@@ -302,8 +302,8 @@ Before granting access, verify the destination is private, exposes only `main`,
 and has exactly one reachable commit which is also its only root:
 
 ```bash
-gh repo view "paveldudka/devops-interview-${candidate_id}" \
-  --json visibility --jq '.visibility == "PRIVATE"'
+test "$(gh repo view "paveldudka/devops-interview-${candidate_id}" \
+  --json visibility --jq '.visibility')" = 'PRIVATE'
 test "$(git -C "${snapshot_dir}" ls-remote --heads origin | awk '{print $2}')" \
   = 'refs/heads/main'
 test "$(git -C "${snapshot_dir}" rev-list --all --count)" -eq 1
