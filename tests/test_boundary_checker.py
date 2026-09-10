@@ -26,11 +26,13 @@ FAKE_PRIVATE_KEY = "-----BEGIN " + "RSA PRIVATE KEY-----"
         "terragrunt run-all apply",
         "docker push example.invalid/worker:1",
         "docker image push example.invalid/worker:1",
+        "docker compose push",
         "podman push example.invalid/worker:1",
         "crane push image.tar example.invalid/worker:1",
         "skopeo copy docker-archive:w.tar docker://example.invalid/worker:1",
         "docker buildx build --push -t example.invalid/worker:1 .",
         "docker buildx build \\\n  -t example.invalid/worker:1 \\\n  --push .",
+        "docker buildx build --output=type=registry -t example.invalid/worker:1 .",
         "aws ecs update-service --cluster c --service s",
         "aws ecr get-login-password | docker login --password-stdin r",
         "kubectl rollout restart deployment/worker",
@@ -41,6 +43,8 @@ FAKE_PRIVATE_KEY = "-----BEGIN " + "RSA PRIVATE KEY-----"
         "          push: True",
         "          push: true # publish",
         "          push: ${{ github.event_name != 'pull_request' }}",
+        "run: docker build . && docker push x # not a comment",
+        "curl https://example.invalid//x && docker push y",
     ],
 )
 def test_live_automation_is_detected(snippet: str) -> None:
@@ -57,14 +61,37 @@ def test_live_automation_is_detected(snippet: str) -> None:
         "docker build -t example.invalid/worker:1 .",
         "docker buildx build --load -t example.invalid/worker:1 .",
         "on:\n  push:\n    branches: [main]",
+        "on:\n  push: # only main\n    branches: [main]",
+        "on:\n  push: { branches: [main] }",
         "on: [push, pull_request]",
         "      - uses: actions/checkout@v4",
         "      - uses: docker/build-push-action@v6\n        with:\n          push: false",
         "          push: false # local only",
+        "          push: false\r\n",
+        "# never docker push from here\nbuild:\n\tdocker build .",
+        "docker build . # CI runs terraform apply only after approval",
+        "// terraform apply happens elsewhere",
     ],
 )
 def test_local_automation_is_allowed(snippet: str) -> None:
     assert find_live_automation(snippet) == []
+
+
+@pytest.mark.parametrize(
+    "snippet",
+    [
+        'description = "Digest pinned by docker push in CI"',
+        'error_message = "terraform apply must never see a mutable tag"',
+        '# terraform apply is the platform\'s job\nimage = "x"',
+    ],
+)
+def test_hcl_prose_is_allowed(snippet: str) -> None:
+    assert find_live_automation(snippet, hcl=True) == []
+
+
+def test_hcl_command_outside_strings_is_detected() -> None:
+    snippet = 'run "x" {\n  command = apply\n}\nlocal-exec terraform apply\n'
+    assert find_live_automation(snippet, hcl=True) == ["terraform apply"]
 
 
 def test_repository_scan_covers_all_but_fixture_prose_and_tests(
@@ -75,12 +102,19 @@ def test_repository_scan_covers_all_but_fixture_prose_and_tests(
         "Makefile",
         "deploy/apply.sh",
         "exercise/release.yml",
+        "exercise/apply.sh",
         "README.md",
         "tests/test_release.py",
+        "tests/deploy.sh",
     ]:
         path = tmp_path / relative
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text("run: terraform apply\n", encoding="utf-8")
+    (tmp_path / "infra").mkdir()
+    (tmp_path / "infra" / "note.tf").write_text(
+        'variable "x" {\n  description = "set by terraform apply in CI"\n}\n',
+        encoding="utf-8",
+    )
 
     assert find_live_automation_in_repository(tmp_path) == [
         ".github/workflows/deploy.yml: terraform apply",
@@ -93,7 +127,8 @@ def test_repository_scan_flags_make_overrides_and_symlinks(tmp_path: Path) -> No
     (tmp_path / "Makefile").write_text("baseline:\n\t@true\n", encoding="utf-8")
     (tmp_path / "GNUmakefile").write_text("baseline:\n\t@true\n", encoding="utf-8")
     (tmp_path / "scripts").mkdir()
-    (tmp_path / "scripts" / "elsewhere").symlink_to(tmp_path.parent)
+    (tmp_path / "outside").mkdir()
+    (tmp_path / "scripts" / "elsewhere").symlink_to(tmp_path / "outside")
 
     assert find_live_automation_in_repository(tmp_path) == [
         "GNUmakefile: overrides Makefile targets",
@@ -158,8 +193,10 @@ def test_terraform_live_declarations_are_found_recursively(tmp_path: Path) -> No
     (nested / "state.tf").write_text(
         'data "terraform_remote_state" "net" {}\n', encoding="utf-8"
     )
-    (tmp_path / "clean.tf").write_text(
-        'resource "aws_ecs_service" "w" {}\n', encoding="utf-8"
+    (tmp_path / "clean.tf").write_bytes(
+        b'# d\xe9ploy\n# backend "s3" {}\n'
+        b'data "aws_iam_policy_document" "assume" {}\n'
+        b'resource "aws_ecs_service" "w" {}\n'
     )
     (vendored / "main.tf").write_text('backend "s3" {}\n', encoding="utf-8")
 
@@ -175,7 +212,8 @@ def test_terraform_tests_must_mock_the_default_provider(tmp_path: Path) -> None:
     tests = tmp_path / "tests"
     tests.mkdir()
     (tests / "mocked.tftest.hcl").write_text(
-        'mock_provider "aws" {}\nrun "a" { command = plan }\n', encoding="utf-8"
+        'mock_provider "aws" {\n  # alias = "commented"\n}\nrun "a" { command = plan }\n',
+        encoding="utf-8",
     )
     (tests / "aliased.tftest.hcl").write_text(
         'mock_provider "aws" {\n  alias = "other"\n}\n', encoding="utf-8"

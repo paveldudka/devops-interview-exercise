@@ -33,7 +33,7 @@ jobs:
             | sha256sum --check
           tar -xzf /tmp/actionlint.tar.gz -C /tmp actionlint
           install /tmp/actionlint /usr/local/bin/actionlint
-      # -f keeps a stray GNUmakefile from replacing the supplied targets.
+      # -f on both make steps keeps a stray GNUmakefile from replacing the targets.
       - name: Run baseline checks
         run: make -f Makefile baseline
       - name: Run all tests

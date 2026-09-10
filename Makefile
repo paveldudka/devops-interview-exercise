@@ -17,13 +17,13 @@ format-check:
 	@python -m pytest --collect-only -qq
 
 # Supplied environment and boundary proof. Not a solution grade.
-# pytest exits non-zero when the baseline marker selects nothing.
+# pytest exits non-zero when nothing is selected; conftest fails skipped baseline checks.
 baseline: init format-check
 	@terraform -chdir=infra validate
 	@python scripts/run_terraform_tests.py -filter=tests/baseline.tftest.hcl
 	@python -m pytest -q -m baseline
 
-# Every Python test under tests/ and every Terraform test under infra/tests.
+# Every Python test under tests/ and every Terraform test directly in infra/ or infra/tests/.
 test: init
 	@python scripts/run_terraform_tests.py
 	@python -m pytest -q

@@ -35,13 +35,15 @@ The supplied baseline checks formatting, syntax, basic Terraform rendering, and
 the repository's local-only boundaries: the fixture stays outside
 `.github/workflows` and `ci.yml` is the only active workflow; no live
 deployment, publishing, or cloud-login commands or actions appear in any file
-except the fixture, Markdown, and Python tests; Terraform declares no backend,
-cloud block, data source, import, provisioner, or remote state and uses HCL
-only; every Terraform test file is discoverable and mocks the default `aws`
-provider; and no credential values are present. `make test` additionally runs
-every Python test under `tests/` and every Terraform test in `infra/` or
-`infra/tests/`.
-None of this assesses whether a proposed release design is production-ready or
+outside `exercise/`, `tests/`, and Markdown (comments and HCL strings are
+ignored; symlinks and a `GNUmakefile` or `makefile` are rejected because they
+cannot be scanned or would bypass the Makefile); Terraform declares no backend,
+cloud block, import, provisioner, remote state, or data source other than
+`aws_iam_policy_document`, and uses HCL only; every Terraform test file is
+discoverable and mocks the default `aws` provider; and no credential values are
+present. `make test` additionally runs every Python test under `tests/` and
+every Terraform test file directly in `infra/` or `infra/tests/`. None of this
+assesses whether a proposed release design is production-ready or
 can demonstrate real registry, GitHub Actions, AWS, ECS, networking,
 application, observability, or traffic behavior. Candidates should explain the
 evidence their own validation provides and the uncertainty that remains.

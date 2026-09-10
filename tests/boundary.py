@@ -5,31 +5,48 @@ fixture stays inactive. They are regex safety nets, not a sandbox, and they
 do not assess the modeled release design.
 """
 
+import os
 import re
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 
 IGNORED_DIRECTORIES = frozenset(
-    {".git", ".pytest_cache", ".ruff_cache", ".terraform", ".venv", "__pycache__"}
+    {
+        ".git",
+        ".pytest_cache",
+        ".ruff_cache",
+        ".terraform",
+        ".venv",
+        "__pycache__",
+        "node_modules",
+        "venv",
+    }
 )
 
-# Files the live-command scan skips: the assessed fixture, prose, and Python
-# tests, whose string literals legitimately describe deployment commands.
+# The live-command scan skips everything under these directories (the assessed
+# fixture; Python tests whose literals describe commands) and Markdown prose.
 SCAN_EXEMPT_PREFIXES = ("exercise", "tests")
 SCAN_EXEMPT_SUFFIXES = (".md",)
 
 # GNU make would read these before Makefile and bypass its targets.
 MAKE_OVERRIDES = ("GNUmakefile", "makefile")
 
+HCL_SUFFIXES = (".tf", ".tfvars", ".hcl")
+
 LINE_CONTINUATION = re.compile(r"\\\r?\n\s*")
+# Full-line or trailing `#`/`//` comments; not a `#` glued to a word.
+COMMENT = re.compile(r"(?:^|(?<=\s))(?:#|//).*$", re.MULTILINE)
+# Quoted HCL literals such as description and error_message prose.
+HCL_STRING = re.compile(r'"(?:\\.|[^"\\\n])*"')
 
 # Commands that authenticate to, publish to, or mutate a live environment.
 LIVE_COMMAND = re.compile(
     r"\b(?:"
     r"(?:terraform|terragrunt|tofu)(?:\s+(?:-\S+|run-all))*\s+(?:apply|destroy|import)"
-    r"|(?:docker|podman|nerdctl|crane)\s+(?:image\s+)?push"
-    r"|(?:docker|podman|nerdctl)\s+(?:buildx\s+)?build\b[^\n]*\s--push\b"
+    r"|(?:docker|podman|nerdctl|crane)\s+(?:image\s+|compose\s+|manifest\s+)?push"
+    r"|(?:docker|podman|nerdctl)\s+(?:buildx\s+)?build\b[^\n]*\s"
+    r"(?:--push\b|--output[= ]type=registry)"
     r"|(?:docker|podman|nerdctl)\s+login"
     r"|skopeo\s+copy"
     r"|aws\s+ecr\s+get-login-password"
@@ -53,10 +70,10 @@ LIVE_ACTION = re.compile(
     re.IGNORECASE,
 )
 
-# Any `push:` input other than a literal false, wherever it appears (for
-# example docker/build-push-action). A bare `push:` trigger key has no value.
+# A scalar `push:` input other than a literal false, wherever it appears (for
+# example docker/build-push-action). Trigger keys carry no scalar value.
 PUBLISHING_INPUT = re.compile(
-    r"^[ \t]*push:[ \t]*(?!['\"]?false['\"]?[ \t]*(?:#.*)?$)\S.*$",
+    r"^[ \t]*push:[ \t]*(?!['\"]?false['\"]?[ \t\r]*$)[^\s{[|>&*].*$",
     re.MULTILINE | re.IGNORECASE,
 )
 
@@ -73,10 +90,13 @@ SECRET_PATTERNS = {
 }
 
 # Terraform declarations that reach a backend, live data, or a live host.
+# aws_iam_policy_document is rendered client-side and stays allowed.
 TERRAFORM_LIVE_DECLARATIONS = {
     "backend block": re.compile(r'^\s*backend\s+"', re.MULTILINE),
     "cloud block": re.compile(r"^\s*cloud\s*{", re.MULTILINE),
-    "data source": re.compile(r'^\s*data\s+"', re.MULTILINE),
+    "data source": re.compile(
+        r'^\s*data\s+"(?!aws_iam_policy_document")', re.MULTILINE
+    ),
     "import block": re.compile(r"^\s*import\s*{", re.MULTILINE),
     "provisioner": re.compile(r'^\s*provisioner\s+"', re.MULTILINE),
     "remote state": re.compile(r"terraform_remote_state"),
@@ -94,11 +114,17 @@ def is_ignored(path: Path, root: Path) -> bool:
 
 
 def read_text(path: Path) -> str:
-    """Decode any file as text; secrets and commands are ASCII anyway."""
+    """Decode UTF-8 (lossy) or BOM-prefixed UTF-16; the patterns are ASCII."""
     data = path.read_bytes()
     if data.startswith((b"\xff\xfe", b"\xfe\xff")):
         return data.decode("utf-16", errors="replace")
     return data.decode("utf-8", errors="replace")
+
+
+def strip_prose(text: str, *, hcl: bool = False) -> str:
+    """Drop comments, and HCL string literals, so prose cannot look like a command."""
+    text = COMMENT.sub("", text)
+    return HCL_STRING.sub('""', text) if hcl else text
 
 
 def repository_files(root: Path) -> list[Path]:
@@ -128,9 +154,9 @@ def find_secrets(root: Path) -> list[str]:
     return findings
 
 
-def find_live_automation(text: str) -> list[str]:
+def find_live_automation(text: str, *, hcl: bool = False) -> list[str]:
     """Live deployment commands or actions in one automation file."""
-    joined = LINE_CONTINUATION.sub(" ", text)
+    joined = strip_prose(LINE_CONTINUATION.sub(" ", text), hcl=hcl)
     matches = [match.group(0) for match in LIVE_COMMAND.finditer(joined)]
     matches.extend(match.group(0) for match in LIVE_ACTION.finditer(joined))
     matches.extend(
@@ -140,10 +166,12 @@ def find_live_automation(text: str) -> list[str]:
 
 
 def find_live_automation_in_repository(root: Path) -> list[str]:
-    """Live deployment paths in any non-exempt file; symlinks cannot be scanned."""
+    """Live deployment paths in any non-exempt file; symlinks are flagged, not followed."""
     findings: list[str] = []
+    # Exact names: stat() would resolve `makefile` to Makefile on macOS mounts.
+    present = {entry.name for entry in os.scandir(root)}
     for name in MAKE_OVERRIDES:
-        if (root / name).exists():
+        if name in present:
             findings.append(f"{name}: overrides Makefile targets")
     for path in repository_files(root):
         relative = path.relative_to(root)
@@ -152,7 +180,8 @@ def find_live_automation_in_repository(root: Path) -> list[str]:
             continue
         if is_scan_exempt(relative):
             continue
-        for match in find_live_automation(read_text(path)):
+        hcl = path.name.endswith(HCL_SUFFIXES)
+        for match in find_live_automation(read_text(path), hcl=hcl):
             findings.append(f"{relative}: {match}")
     return findings
 
@@ -166,7 +195,7 @@ def terraform_files(infra: Path, pattern: str) -> list[Path]:
 def find_terraform_live_declarations(infra: Path) -> list[str]:
     findings: list[str] = []
     for path in terraform_files(infra, "*.tf") + terraform_files(infra, "*.tftest.hcl"):
-        content = path.read_text(encoding="utf-8")
+        content = COMMENT.sub("", read_text(path))
         for label, pattern in TERRAFORM_LIVE_DECLARATIONS.items():
             if pattern.search(content):
                 findings.append(f"{path.relative_to(infra)}: {label}")
@@ -176,7 +205,7 @@ def find_terraform_live_declarations(infra: Path) -> list[str]:
 def find_unmocked_terraform_tests(infra: Path) -> list[str]:
     findings: list[str] = []
     for path in terraform_files(infra, "*.tftest.hcl"):
-        content = path.read_text(encoding="utf-8")
+        content = COMMENT.sub("", read_text(path))
         if not DEFAULT_MOCK_PROVIDER_BLOCK.search(content):
             findings.append(f'{path.relative_to(infra)}: missing mock_provider "aws"')
         if REAL_PROVIDER_BLOCK.search(content):

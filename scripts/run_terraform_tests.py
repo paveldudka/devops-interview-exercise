@@ -1,7 +1,7 @@
-"""Run terraform test and fail unless at least one run block passed.
+"""Run terraform test; fail unless every run block passed and at least one ran.
 
-A filter that matches no file, or a file without run blocks, otherwise
-reports success. Extra arguments are passed through to terraform test.
+terraform test itself exits 0 with "0 passed" for a filter that matches no
+file or a file without run blocks. Extra arguments are passed through.
 """
 
 import json
@@ -10,7 +10,7 @@ import sys
 from typing import TypedDict
 
 
-class Summary(TypedDict):
+class Summary(TypedDict, total=False):
     status: str
     passed: int
     failed: int
@@ -21,20 +21,20 @@ class Summary(TypedDict):
 def evaluate(stdout: str, returncode: int) -> int:
     """Turn terraform test -json output into an exit code, printing progress."""
     summary: Summary | None = None
+    unexpected: list[str] = []
     for line in stdout.splitlines():
         try:
             event = json.loads(line)
         except json.JSONDecodeError:
-            print(
-                f"unexpected non-JSON output from terraform test (wrapper enabled?): "
-                f"{line!r}",
-                file=sys.stderr,
-            )
-            return 1
+            unexpected.append(line)
+            continue
         kind = event.get("type")
         if kind == "test_run" and event["test_run"].get("progress") == "complete":
             run = event["test_run"]
-            print(f'{run["path"]}: run "{run["run"]}" {run.get("status", "unknown")}')
+            print(
+                f'{run.get("path", "?")}: run "{run.get("run", "?")}" '
+                f"{run.get('status', 'unknown')}"
+            )
         elif kind == "diagnostic":
             diagnostic = event["diagnostic"]
             print(
@@ -49,6 +49,14 @@ def evaluate(stdout: str, returncode: int) -> int:
     if returncode != 0:
         print(f"terraform test exited with {returncode}", file=sys.stderr)
         return returncode
+    if unexpected:
+        print(
+            "unexpected non-JSON output from terraform test (wrapper enabled?):",
+            *unexpected,
+            sep="\n",
+            file=sys.stderr,
+        )
+        return 1
     if summary is None:
         print("terraform test produced no summary", file=sys.stderr)
         return 1
@@ -70,7 +78,11 @@ def evaluate(stdout: str, returncode: int) -> int:
 
 def main(arguments: list[str]) -> int:
     command = ["terraform", "-chdir=infra", "test", "-json", *arguments]
-    result = subprocess.run(command, capture_output=True, text=True, check=False)
+    try:
+        result = subprocess.run(command, capture_output=True, text=True, check=False)
+    except FileNotFoundError:
+        print("terraform not found on PATH; run: make verify-env", file=sys.stderr)
+        return 1
     code = evaluate(result.stdout, result.returncode)
     if result.stderr:
         print(result.stderr, end="", file=sys.stderr)

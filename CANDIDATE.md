@@ -56,13 +56,13 @@ backend, or a real deployment path.
 
 ## Setup and baseline
 
-Use the included devcontainer. Docker plus a devcontainer-capable editor or CLI
-are the only host prerequisites; initial setup should take under 10 minutes.
-The devcontainer's post-create step installs the Python dependencies, runs
-`make init` to download the Terraform AWS provider (no credentials are needed),
-and then runs `make verify-env`. The 75-minute timer starts only after that
-setup and `make verify-env` have succeeded, so the provider download never
-counts against your time.
+Use the included devcontainer. Docker with BuildKit plus a devcontainer-capable
+editor or CLI are the only host prerequisites; initial setup should take under
+10 minutes. The devcontainer's post-create step installs the Python
+dependencies, runs `make init` to download the Terraform AWS provider (no
+credentials are needed), and then runs `make verify-env`. The 75-minute timer
+starts only after that setup and `make verify-env` have succeeded, so the
+provider download never counts against your time.
 
 ```bash
 make verify-env  # confirm the supported toolchain is ready
@@ -75,7 +75,9 @@ The baseline must remain green. `make test` runs every Python test under
 (Terraform does not discover nested directories), including any you add, and
 fails if none run; explain their evidence and limitations. You may update
 supporting files (the Makefile, `scripts/`, the supplied tests, the
-devcontainer) when your change calls for it, and should explain why. There is
+devcontainer, `pytest.ini`, `requirements.in` and `requirements.lock`) when your
+change calls for it, and should explain why. Terraform must not gain a backend,
+remote state, or data sources other than `aws_iam_policy_document`. There is
 no hidden automated pass/fail gate for a preferred solution.
 
 ## AI and documentation policy

@@ -45,9 +45,15 @@ python -m ruff --version >/dev/null || {
 }
 
 # The AWS provider download is large; it must not eat into the timed exercise.
-# validate is offline and fails if the locked provider is missing or partial.
-if ! terraform -chdir=infra validate >/dev/null 2>&1; then
-  echo "Terraform providers are not initialized; run: make init" >&2
+# validate is offline; it fails on a missing or partial provider and on any
+# configuration error, so show its diagnostics and only suggest init when apt.
+if ! validate_output="$(terraform -chdir=infra validate -no-color 2>&1)"; then
+  echo "${validate_output}" >&2
+  if grep -qiE 'no package for|missing required provider|terraform init' <<<"${validate_output}"; then
+    echo "Terraform providers are not initialized; run: make init" >&2
+  else
+    echo "infra/ does not validate; fix the errors above (make init will not help)" >&2
+  fi
   exit 1
 fi
 

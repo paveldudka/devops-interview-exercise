@@ -1,6 +1,6 @@
 # ECS Release Review — Senior DevOps / Platform Exercise
 
-This private repository contains a 75-minute live exercise centered on reviewing
+This repository contains a 75-minute live exercise centered on reviewing
 and improving a proposed AWS ECS release process. It is intentionally small,
 synthetic, and fully local: **local validation uses no AWS account, credentials,
 backend, state, or infrastructure**.

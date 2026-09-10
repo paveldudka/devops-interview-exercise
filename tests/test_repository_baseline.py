@@ -33,7 +33,13 @@ def test_only_repository_validation_is_an_active_workflow() -> None:
 @pytest.mark.baseline
 def test_executable_automation_has_no_live_deployment_path() -> None:
     assert (ROOT / "Makefile").is_file()
-    assert find_live_automation_in_repository(ROOT) == []
+    findings = find_live_automation_in_repository(ROOT)
+    assert findings == [], (
+        "live deployment commands, actions, or publishing inputs are not allowed "
+        "outside exercise/, tests/, and Markdown. This is a plain-text scan with "
+        "comments and HCL strings removed, so reword other prose or move it to "
+        "Markdown:\n" + "\n".join(findings)
+    )
 
 
 @pytest.mark.baseline
