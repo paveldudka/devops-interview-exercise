@@ -1,3 +1,3 @@
 pytest==8.3.5
-PyYAML==6.0.2
+PyYAML==6.0.2  # supplied for candidate tests that parse workflow YAML
 ruff==0.11.2

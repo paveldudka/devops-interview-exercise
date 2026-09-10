@@ -4,7 +4,7 @@ ARG TERRAFORM_VERSION=1.9.8
 ARG ACTIONLINT_VERSION=1.7.7
 ARG TARGETARCH
 
-RUN test -n "${TARGETARCH}" \
+RUN test -n "${TARGETARCH}" || { echo "TARGETARCH unset: build with BuildKit" >&2; exit 1; } \
     && case "${TARGETARCH}" in \
       amd64) terraform_sha="186e0145f5e5f2eb97cbd785bc78f21bae4ef15119349f6ad4fa535b83b10df8" ;; \
       arm64) terraform_sha="f85868798834558239f6148834884008f2722548f84034c9b0f62934b2d73ebb" ;; \

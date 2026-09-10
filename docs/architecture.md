@@ -32,10 +32,15 @@ reachable registry supplied by the surrounding platform.
 ## What local validation cannot prove
 
 The supplied baseline checks formatting, syntax, basic Terraform rendering, and
-the repository's local-only boundaries: no live deployment commands or actions
-in active workflows or repository automation, no Terraform backend, data
-source, or remote state, mocked providers in Terraform tests, and no credential
-values. `make test` additionally runs every Python and Terraform test present.
+the repository's local-only boundaries: the fixture stays outside
+`.github/workflows` and `ci.yml` is the only active workflow; no live
+deployment, publishing, or cloud-login commands or actions appear in any file
+except the fixture, Markdown, and Python tests; Terraform declares no backend,
+cloud block, data source, import, provisioner, or remote state and uses HCL
+only; every Terraform test file is discoverable and mocks the default `aws`
+provider; and no credential values are present. `make test` additionally runs
+every Python test under `tests/` and every Terraform test in `infra/` or
+`infra/tests/`.
 None of this assesses whether a proposed release design is production-ready or
 can demonstrate real registry, GitHub Actions, AWS, ECS, networking,
 application, observability, or traffic behavior. Candidates should explain the

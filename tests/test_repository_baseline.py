@@ -7,8 +7,9 @@ from boundary import (
     find_live_automation_in_repository,
     find_secrets,
     find_terraform_live_declarations,
+    find_undiscoverable_terraform_tests,
     find_unmocked_terraform_tests,
-    is_ignored,
+    terraform_files,
 )
 
 
@@ -31,24 +32,24 @@ def test_only_repository_validation_is_an_active_workflow() -> None:
 
 @pytest.mark.baseline
 def test_executable_automation_has_no_live_deployment_path() -> None:
+    assert (ROOT / "Makefile").is_file()
     assert find_live_automation_in_repository(ROOT) == []
 
 
 @pytest.mark.baseline
 def test_terraform_model_exists_and_stays_local() -> None:
     infra = ROOT / "infra"
-    configuration = [
-        path for path in infra.rglob("*.tf") if not is_ignored(path, infra)
-    ]
-    assert configuration, "infra/ must contain the Terraform model"
-    assert not list(infra.rglob("*.tf.json")), "use HCL, not JSON, for Terraform"
+    assert terraform_files(infra, "*.tf"), "infra/ must contain the Terraform model"
+    assert terraform_files(infra, "*.tf.json") == [], "use HCL, not JSON"
+    assert terraform_files(infra, "*.tftest.json") == [], "use HCL, not JSON"
     assert find_terraform_live_declarations(infra) == []
 
 
 @pytest.mark.baseline
-def test_terraform_tests_use_the_mock_provider() -> None:
+def test_terraform_tests_are_discoverable_and_mocked() -> None:
     infra = ROOT / "infra"
-    assert list(infra.rglob("*.tftest.hcl")), "infra/tests must contain a test"
+    assert terraform_files(infra, "*.tftest.hcl"), "infra/tests must contain a test"
+    assert find_undiscoverable_terraform_tests(infra) == []
     assert find_unmocked_terraform_tests(infra) == []
 
 

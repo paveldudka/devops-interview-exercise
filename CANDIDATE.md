@@ -67,14 +67,16 @@ counts against your time.
 ```bash
 make verify-env  # confirm the supported toolchain is ready
 make baseline    # check formatting, syntax, and the local model boundaries
-make test        # run every Python test in tests/ and Terraform test in infra/tests
+make test        # run every Python and Terraform test, including yours
 ```
 
-The baseline must remain green. `make test` runs all tests, including any you
-add, and fails if none run; explain their evidence and limitations. You may
-update supporting files and tests when your change calls for it, and should
-explain why. There is no hidden automated pass/fail gate for a preferred
-solution.
+The baseline must remain green. `make test` runs every Python test under
+`tests/` and every Terraform test file directly in `infra/` or `infra/tests/`
+(Terraform does not discover nested directories), including any you add, and
+fails if none run; explain their evidence and limitations. You may update
+supporting files (the Makefile, `scripts/`, the supplied tests, the
+devcontainer) when your change calls for it, and should explain why. There is
+no hidden automated pass/fail gate for a preferred solution.
 
 ## AI and documentation policy
 

@@ -20,10 +20,10 @@ format-check:
 # pytest exits non-zero when the baseline marker selects nothing.
 baseline: init format-check
 	@terraform -chdir=infra validate
-	@python scripts/terraform_test.py -filter=tests/baseline.tftest.hcl
+	@python scripts/run_terraform_tests.py -filter=tests/baseline.tftest.hcl
 	@python -m pytest -q -m baseline
 
 # Every Python test under tests/ and every Terraform test under infra/tests.
 test: init
-	@python scripts/terraform_test.py
+	@python scripts/run_terraform_tests.py
 	@python -m pytest -q

@@ -15,9 +15,11 @@ fi
 
 terraform_version="$(terraform version -json | python -c 'import json,sys; print(json.load(sys.stdin)["terraform_version"])')"
 python - "${terraform_version}" <<'PY'
+import re
 import sys
 
-version = tuple(int(part) for part in sys.argv[1].split(".")[:2])
+match = re.match(r"(\d+)\.(\d+)", sys.argv[1])
+version = tuple(int(part) for part in match.groups()) if match else ()
 if not (1, 7) <= version < (2, 0):
     raise SystemExit(f"Terraform >=1.7,<2.0 is required; found {sys.argv[1]}")
 PY
@@ -43,7 +45,8 @@ python -m ruff --version >/dev/null || {
 }
 
 # The AWS provider download is large; it must not eat into the timed exercise.
-if [[ ! -d infra/.terraform/providers ]]; then
+# validate is offline and fails if the locked provider is missing or partial.
+if ! terraform -chdir=infra validate >/dev/null 2>&1; then
   echo "Terraform providers are not initialized; run: make init" >&2
   exit 1
 fi
