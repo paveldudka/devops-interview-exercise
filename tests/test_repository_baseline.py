@@ -36,8 +36,9 @@ def test_executable_automation_has_no_live_deployment_path() -> None:
     findings = find_live_automation_in_repository(ROOT)
     assert findings == [], (
         "live deployment commands, actions, or publishing inputs are not allowed "
-        "outside exercise/, tests/, and Markdown. This is a plain-text scan with "
-        "comments, HCL quoted strings, and heredocs removed, so reword other prose "
+        "outside YAML fixtures under exercise/, Python files under tests/, and "
+        "Markdown. This is a plain-text scan with comments, HCL quoted strings, "
+        "and heredocs removed, so reword other prose "
         "or move it to Markdown. Symlinks and a GNUmakefile/makefile are rejected "
         "outright:\n" + "\n".join(findings)
     )

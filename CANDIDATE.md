@@ -24,9 +24,9 @@ communication—not the number of findings or lines changed.
 - Local validation uses a mocked Terraform provider. It does not access an AWS
   account, credential, remote backend, state, or live deployment.
 - For this exercise, assume the surrounding platform provides a runner with the
-  required tools, working registry and AWS authentication, registry access,
-  Terraform initialization, and remote state. Those platform capabilities work
-  as intended and are outside the assessment scope.
+  required tools, working AWS and container-registry authentication, Terraform
+  initialization, and remote state. Those platform capabilities work as
+  intended and are outside the assessment scope.
 
 See [docs/architecture.md](docs/architecture.md) for the model and validation
 boundaries.
@@ -79,8 +79,8 @@ files (the Makefile, `scripts/`, the supplied tests, the devcontainer,
 `pytest.ini`) when your change calls for it, and should explain why. Python
 dependencies are hash-pinned in `requirements.lock`; adding one means
 regenerating that file. Terraform must stay local: no backend, cloud block,
-import or provisioner blocks, JSON syntax, or data sources that read live AWS
-state (the client-rendered `aws_iam_policy_document` is fine). There is no
+import or provisioner blocks, JSON syntax, or `data` sources of any kind, the
+one exception being the client-rendered `aws_iam_policy_document`. There is no
 hidden automated pass/fail gate for a preferred solution.
 
 ## AI and documentation policy

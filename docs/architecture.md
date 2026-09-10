@@ -16,9 +16,9 @@ application dependencies are intentionally outside the model.
 ## Supplied-platform assumptions
 
 Assume the surrounding platform provides a runner with the required tools,
-working registry and AWS authentication, registry access, Terraform
-initialization, and remote state. Those capabilities work as intended and their
-setup is outside the assessment scope.
+working AWS and container-registry authentication, Terraform initialization,
+and remote state. Those capabilities work as intended and their setup is
+outside the assessment scope.
 
 ## What is mocked or inactive
 
@@ -35,15 +35,18 @@ The supplied baseline checks formatting, syntax, basic Terraform rendering, and
 the repository's local-only boundaries: the fixture stays outside
 `.github/workflows` and `ci.yml` is the only active workflow; no live
 deployment, publishing, or cloud-login commands, actions, or `push:` inputs
-appear in any file outside `exercise/`, `tests/`, and Markdown (comments, HCL
-quoted strings, and heredocs are ignored); symlinks anywhere and a
-`GNUmakefile` or `makefile` are rejected because they cannot be scanned or would
-bypass the Makefile; no Terraform file anywhere declares a backend, cloud
-block, import, provisioner, or data source other than `aws_iam_policy_document`,
-and `infra/` uses HCL only; every Terraform test file is discoverable and mocks
-the default `aws` provider; and no credential values are present. `make test` additionally runs every Python test under `tests/` and
-every Terraform test file directly in `infra/` or `infra/tests/`. None of this
-assesses whether a proposed release design is production-ready or
-can demonstrate real registry, GitHub Actions, AWS, ECS, networking,
-application, observability, or traffic behavior. Candidates should explain the
-evidence their own validation provides and the uncertainty that remains.
+appear in any file other than YAML fixtures under `exercise/`, Python files
+under `tests/`, and Markdown (comments, HCL quoted strings, and heredocs are
+ignored); symlinks anywhere and a `GNUmakefile` or `makefile` are rejected
+because they cannot be scanned or would bypass the Makefile; no Terraform file
+anywhere declares a backend, cloud block, import, provisioner, or data source
+other than `aws_iam_policy_document`, and `infra/` uses HCL only; every
+Terraform test file is discoverable and mocks the default `aws` provider; and
+no value shaped like an AWS key, GitHub or Slack token, or private key is
+present (a pattern scan, not a secret detector). `make test` additionally runs
+every Python test under `tests/` and every Terraform test file directly in
+`infra/` or `infra/tests/`. None of this assesses whether a proposed release
+design is production-ready or can demonstrate real registry, GitHub Actions,
+AWS, ECS, networking, application, observability, or traffic behavior.
+Candidates should explain the evidence their own validation provides and the
+uncertainty that remains.

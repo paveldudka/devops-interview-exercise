@@ -7,43 +7,51 @@ file or a file without run blocks. Extra arguments are passed through.
 import json
 import subprocess
 import sys
-from typing import TypedDict
+
+COUNTERS = ("passed", "failed", "errored", "skipped")
 
 
-class Summary(TypedDict, total=False):
-    status: str
-    passed: int
-    failed: int
-    errored: int
-    skipped: int
+def as_dict(value: object) -> dict[str, object]:
+    return value if isinstance(value, dict) else {}
+
+
+def counters(summary: dict[str, object]) -> dict[str, int] | None:
+    """The four run counters, or None if any is missing an integer value."""
+    counts: dict[str, int] = {}
+    for key in COUNTERS:
+        value = summary.get(key, 0)
+        if isinstance(value, bool) or not isinstance(value, int):
+            return None
+        counts[key] = value
+    return counts
 
 
 def evaluate(stdout: str, returncode: int) -> int:
     """Turn terraform test -json output into an exit code, printing progress."""
-    summary: Summary | None = None
+    summary: dict[str, object] | None = None
     unexpected: list[str] = []
     for line in stdout.splitlines():
+        if not line.strip():
+            continue
         try:
             event = json.loads(line)
         except json.JSONDecodeError:
+            event = None
+        if not isinstance(event, dict):
             unexpected.append(line)
             continue
         kind = event.get("type")
-        if (
-            kind == "test_run"
-            and event.get("test_run", {}).get("progress") == "complete"
-        ):
-            run = event["test_run"]
+        run = as_dict(event.get("test_run"))
+        if kind == "test_run" and run.get("progress") == "complete":
             print(
                 f'{run.get("path", "?")}: run "{run.get("run", "?")}" '
                 f"{run.get('status', 'unknown')}"
             )
         elif kind == "diagnostic":
-            diagnostic = event.get("diagnostic", {})
-            where = diagnostic.get("range", {})
-            location = (
-                f"{where.get('filename', '')}:{where.get('start', {}).get('line', '')}"
-            )
+            diagnostic = as_dict(event.get("diagnostic"))
+            where = as_dict(diagnostic.get("range"))
+            start = as_dict(where.get("start"))
+            location = f"{where.get('filename', '')}:{start.get('line', '')}"
             print(
                 f"{diagnostic.get('severity', 'error')}: {diagnostic.get('summary', '')}"
                 f"{f' ({location})' if location != ':' else ''}",
@@ -52,11 +60,12 @@ def evaluate(stdout: str, returncode: int) -> int:
             if diagnostic.get("detail"):
                 print(diagnostic["detail"], file=sys.stderr)
         elif kind == "test_summary":
-            summary = event.get("test_summary", {})
+            summary = as_dict(event.get("test_summary"))
 
     if unexpected:
         print(
-            "unexpected non-JSON output from terraform test (wrapper enabled?):",
+            "unexpected output from terraform test; expected one JSON event per line"
+            " (wrapper enabled?):",
             *unexpected,
             sep="\n",
             file=sys.stderr,
@@ -69,14 +78,23 @@ def evaluate(stdout: str, returncode: int) -> int:
     if summary is None:
         print("terraform test produced no summary", file=sys.stderr)
         return 1
-    passed = summary.get("passed", 0)
-    failed = summary.get("failed", 0)
-    errored = summary.get("errored", 0)
-    skipped = summary.get("skipped", 0)
-    print(f"{passed} passed, {failed} failed, {errored} errored, {skipped} skipped")
-    if failed or errored or skipped or summary.get("status") != "pass":
+    counts = counters(summary)
+    if counts is None:
+        print(
+            f"terraform test summary has non-integer counters: {summary}",
+            file=sys.stderr,
+        )
         return 1
-    if passed == 0:
+    print(", ".join(f"{count} {key}" for key, count in counts.items()))
+    if counts["failed"] or counts["errored"] or counts["skipped"]:
+        return 1
+    if summary.get("status") != "pass":
+        print(
+            f"terraform test summary status is {summary.get('status')!r}",
+            file=sys.stderr,
+        )
+        return 1
+    if counts["passed"] == 0:
         print(
             "no Terraform run block executed; check the test file and filter",
             file=sys.stderr,

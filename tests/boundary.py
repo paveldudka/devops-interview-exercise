@@ -24,9 +24,11 @@ IGNORED_DIRECTORIES = frozenset(
     }
 )
 
-# The live-command scan skips everything under these directories (the assessed
-# fixture; Python tests whose literals describe commands) and Markdown prose.
-SCAN_EXEMPT_PREFIXES = ("exercise", "tests")
+# The live-command scan skips the assessed workflow fixture, Python test
+# sources (whose literals describe commands), and Markdown prose. Any other
+# file under exercise/ or tests/ (shell, make, YAML) is executable automation
+# and stays scanned.
+SCAN_EXEMPT_BY_DIRECTORY = {"exercise": (".yml", ".yaml"), "tests": (".py",)}
 SCAN_EXEMPT_SUFFIXES = (".md",)
 
 # GNU make would read these before Makefile and bypass its targets.
@@ -35,28 +37,28 @@ MAKE_OVERRIDES = ("GNUmakefile", "makefile")
 HCL_SUFFIXES = (".tf", ".tfvars", ".hcl")
 
 LINE_CONTINUATION = re.compile(r"\\\r?\n\s*")
-# A `#` comment, full-line or trailing, only when no quote precedes it on the
-# line; shells treat `#` inside quotes as data.
-HASH_COMMENT = re.compile(r"^([^\"'\n]*?)(?:^|(?<=\s))#.*$", re.MULTILINE)
-HCL_LINE_COMMENT = re.compile(r"^([^\"\n]*?)(?:^|(?<=\s))(?:#|//).*$", re.MULTILINE)
-HCL_BLOCK_COMMENT = re.compile(r"/\*.*?\*/", re.DOTALL)
-HCL_HEREDOC = re.compile(r"<<[-~]?(\w+)\r?\n.*?^[ \t]*\1\b", re.DOTALL | re.MULTILINE)
-HCL_STRING = re.compile(r'"(?:\\.|[^"\\\n])*"')
+HCL_HEREDOC_START = re.compile(r"<<[-~]?(\w+)[ \t]*\r?\n")
+
+# Global flags before the subcommand, with an optional value (`--profile prod`).
+GLOBAL_FLAGS = r"(?:\s+-\S+(?:\s+[^-\s]\S*)?)*"
+# Tokens separated by whitespace or argv-list punctuation (`"terraform", "apply"`).
+ARGV_SEPARATOR = r"(?:\s+|['\"]\s*,\s*['\"])"
 
 # Commands that authenticate to, publish to, or mutate a live environment.
 LIVE_COMMAND = re.compile(
     r"\b(?:"
-    r"(?:terraform|terragrunt|tofu)(?:\s+(?:-\S+|run-all))*\s+(?:apply|destroy|import)"
+    r"(?:terraform|terragrunt|tofu)"
+    rf"(?:{ARGV_SEPARATOR}(?:-\S+|run-all))*{ARGV_SEPARATOR}(?:apply|destroy|import)"
     r"|(?:docker|podman|nerdctl|crane)\s+(?:image\s+|compose\s+|manifest\s+)?push"
     r"|(?:docker|podman|nerdctl)\s+(?:buildx\s+)?build\b[^\n]*\s"
     r"(?:--push\b|(?:--output[= ]|-o[= ]?)type=(?:registry|image\S*push=true))"
     r"|(?:docker|podman|nerdctl)\s+(?:-\S+(?:\s+[^-\s]\S*)?\s+)*login"
     r"|skopeo\s+copy"
-    r"|aws\s+ecr(?:-public)?\s+get-login-password"
-    r"|aws\s+ecs\s+(?:update-service|register-task-definition|run-task|deploy)"
-    r"|aws\s+deploy\s+"
-    r"|kubectl\s+(?:apply|rollout|set|scale)"
-    r"|helm\s+(?:install|upgrade|rollback)"
+    rf"|aws{GLOBAL_FLAGS}\s+ecr(?:-public)?\s+get-login-password"
+    rf"|aws{GLOBAL_FLAGS}\s+ecs\s+(?:update-service|register-task-definition|run-task|deploy)"
+    rf"|aws{GLOBAL_FLAGS}\s+deploy\s+"
+    rf"|kubectl{GLOBAL_FLAGS}\s+(?:apply|rollout|set|scale)"
+    rf"|helm{GLOBAL_FLAGS}\s+(?:install|upgrade|rollback)"
     r")\b",
     re.IGNORECASE,
 )
@@ -83,8 +85,10 @@ PUBLISHING_INPUT = re.compile(
 
 SECRET_PATTERNS = {
     "AWS access key id": re.compile(r"\b(?:AKIA|ASIA)[0-9A-Z]{16}\b"),
+    # Exactly 40 key characters; `\b` would miss values ending in `=`, `+`, or `/`.
     "AWS secret access key": re.compile(
-        r"aws_secret_access_key\s*[=:]\s*['\"]?[A-Za-z0-9/+=]{40}\b", re.IGNORECASE
+        r"aws_secret_access_key\s*[=:]\s*['\"]?[A-Za-z0-9/+=]{40}(?![A-Za-z0-9/+=])",
+        re.IGNORECASE,
     ),
     "GitHub token": re.compile(
         r"\b(?:gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,})"
@@ -106,10 +110,9 @@ TERRAFORM_LIVE_DECLARATIONS = {
 }
 
 REAL_PROVIDER_BLOCK = re.compile(r'^\s*provider\s+"aws"', re.MULTILINE)
+MOCK_PROVIDER_HEADER = re.compile(r'^\s*mock_provider\s+"aws"\s*\{', re.MULTILINE)
 # An aliased mock leaves the default aws provider real.
-DEFAULT_MOCK_PROVIDER_BLOCK = re.compile(
-    r'^\s*mock_provider\s+"aws"\s*\{(?![^}]*\balias\s*=)', re.MULTILINE
-)
+PROVIDER_ALIAS = re.compile(r"^\s*alias\s*=", re.MULTILINE)
 
 
 def is_ignored(path: Path, root: Path) -> bool:
@@ -124,19 +127,141 @@ def read_text(path: Path) -> str:
     return data.decode("utf-8", errors="replace")
 
 
+def hcl_string_end(text: str, start: int) -> int:
+    """Index just past the quoted string opening at start. Handles backslash
+    escapes and quotes nested in `${...}` templates; an unterminated string
+    ends at the newline so the following lines stay visible."""
+    depth = 0
+    i = start + 1
+    while i < len(text):
+        ch = text[i]
+        if ch == "\n":
+            return i
+        if ch == "\\":
+            i += 2
+        elif ch in "$%" and text.startswith("{", i + 1):
+            depth += 1
+            i += 2
+        elif depth and ch == "}":
+            depth -= 1
+            i += 1
+        elif ch == '"':
+            if not depth:
+                return i + 1
+            i = hcl_string_end(text, i)
+        else:
+            i += 1
+    return len(text)
+
+
+def hcl_heredoc_end(text: str, start: int) -> int | None:
+    """Index just past the heredoc opening at start, or None if it never closes."""
+    opening = HCL_HEREDOC_START.match(text, start)
+    if opening is None:
+        return None
+    terminator = re.compile(
+        rf"^[ \t]*{re.escape(opening.group(1))}[ \t]*\r?$", re.MULTILINE
+    )
+    closing = terminator.search(text, opening.end())
+    return None if closing is None else closing.end()
+
+
+def strip_hcl(text: str, *, strings: bool) -> str:
+    """Remove comments in one pass so markers inside strings and quotes inside
+    comments are never misread. With strings=True, quoted strings and heredocs
+    are blanked as well."""
+    kept: list[str] = []
+    i = 0
+    while i < len(text):
+        ch = text[i]
+        if ch == "#" or text.startswith("//", i):
+            end = text.find("\n", i)
+            i = len(text) if end == -1 else end
+        elif text.startswith("/*", i):
+            end = text.find("*/", i + 2)
+            i = len(text) if end == -1 else end + 2
+        elif ch == '"':
+            end = hcl_string_end(text, i)
+            kept.append('""' if strings else text[i:end])
+            i = end
+        elif ch == "<" and (end := hcl_heredoc_end(text, i)) is not None:
+            kept.append('""' if strings else text[i:end])
+            i = end
+        else:
+            kept.append(ch)
+            i += 1
+    return "".join(kept)
+
+
 def strip_hcl_comments(text: str) -> str:
-    return HCL_LINE_COMMENT.sub(r"\1", HCL_BLOCK_COMMENT.sub("", text))
+    return strip_hcl(text, strings=False)
+
+
+def strip_hash_comments(text: str) -> str:
+    """Drop `#` comments (at line start or after whitespace) that sit outside
+    single or double quotes; shells and YAML treat a quoted `#` as data.
+    Quotes are tracked per line, so an unclosed quote keeps its line visible."""
+    kept: list[str] = []
+    for line in text.split("\n"):
+        quote = ""
+        i = 0
+        while i < len(line):
+            ch = line[i]
+            if ch == "\\" and quote != "'":
+                i += 2
+                continue
+            if quote:
+                if ch == quote:
+                    quote = ""
+            elif ch in "\"'":
+                quote = ch
+            elif ch == "#" and (i == 0 or line[i - 1].isspace()):
+                line = line[:i]
+                break
+            i += 1
+        kept.append(line)
+    return "\n".join(kept)
 
 
 def strip_prose(text: str, *, hcl: bool = False) -> str:
     """Drop comments; for HCL also heredocs and quoted strings, so prose cannot
     look like a command. Shell and YAML keep their quoted strings."""
-    if not hcl:
-        return HASH_COMMENT.sub(r"\1", text)
-    text = HCL_BLOCK_COMMENT.sub("", text)
-    text = HCL_HEREDOC.sub('""', text)
-    text = HCL_STRING.sub('""', text)
-    return HCL_LINE_COMMENT.sub(r"\1", text)
+    if hcl:
+        return strip_hcl(text, strings=True)
+    return strip_hash_comments(text)
+
+
+def hcl_block_body(text: str, opening: int) -> str:
+    """Top-level text of the block whose `{` is at opening: nested blocks and
+    objects are dropped, quoted strings are skipped whole."""
+    kept: list[str] = []
+    depth = 0
+    i = opening
+    while i < len(text):
+        ch = text[i]
+        if ch == '"':
+            end = hcl_string_end(text, i)
+            if depth == 1:
+                kept.append(text[i:end])
+            i = end
+            continue
+        if ch == "{":
+            depth += 1
+        elif ch == "}":
+            depth -= 1
+            if depth == 0:
+                break
+        elif depth == 1:
+            kept.append(ch)
+        i += 1
+    return "".join(kept)
+
+
+def has_default_mock_provider(content: str) -> bool:
+    return any(
+        not PROVIDER_ALIAS.search(hcl_block_body(content, header.end() - 1))
+        for header in MOCK_PROVIDER_HEADER.finditer(content)
+    )
 
 
 def repository_files(root: Path) -> list[Path]:
@@ -149,9 +274,8 @@ def repository_files(root: Path) -> list[Path]:
 
 
 def is_scan_exempt(relative: Path) -> bool:
-    return relative.parts[0] in SCAN_EXEMPT_PREFIXES or relative.suffix in (
-        SCAN_EXEMPT_SUFFIXES
-    )
+    exempt_suffixes = SCAN_EXEMPT_BY_DIRECTORY.get(relative.parts[0], ())
+    return relative.suffix in SCAN_EXEMPT_SUFFIXES or relative.suffix in exempt_suffixes
 
 
 def find_secrets(root: Path) -> list[str]:
@@ -217,7 +341,7 @@ def find_unmocked_terraform_tests(infra: Path) -> list[str]:
     findings: list[str] = []
     for path in terraform_files(infra, "*.tftest.hcl"):
         content = strip_hcl_comments(read_text(path))
-        if not DEFAULT_MOCK_PROVIDER_BLOCK.search(content):
+        if not has_default_mock_provider(content):
             findings.append(f'{path.relative_to(infra)}: missing mock_provider "aws"')
         if REAL_PROVIDER_BLOCK.search(content):
             findings.append(f"{path.relative_to(infra)}: declares a real aws provider")
