@@ -1,3 +1,3 @@
 pytest==8.3.5
-PyYAML==6.0.2  # required by verify-env; available for candidate tests that parse YAML
+PyYAML==6.0.2  # for candidate tests that parse workflow YAML; verify-env checks it
 ruff==0.11.2

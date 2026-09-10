@@ -37,8 +37,9 @@ def test_executable_automation_has_no_live_deployment_path() -> None:
     assert findings == [], (
         "live deployment commands, actions, or publishing inputs are not allowed "
         "outside exercise/, tests/, and Markdown. This is a plain-text scan with "
-        "comments and HCL strings removed, so reword other prose or move it to "
-        "Markdown:\n" + "\n".join(findings)
+        "comments, HCL quoted strings, and heredocs removed, so reword other prose "
+        "or move it to Markdown. Symlinks and a GNUmakefile/makefile are rejected "
+        "outright:\n" + "\n".join(findings)
     )
 
 
@@ -48,7 +49,7 @@ def test_terraform_model_exists_and_stays_local() -> None:
     assert terraform_files(infra, "*.tf"), "infra/ must contain the Terraform model"
     assert terraform_files(infra, "*.tf.json") == [], "use HCL, not JSON"
     assert terraform_files(infra, "*.tftest.json") == [], "use HCL, not JSON"
-    assert find_terraform_live_declarations(infra) == []
+    assert find_terraform_live_declarations(ROOT) == []
 
 
 @pytest.mark.baseline

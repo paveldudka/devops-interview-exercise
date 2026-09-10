@@ -23,7 +23,7 @@ setup is outside the assessment scope.
 ## What is mocked or inactive
 
 Terraform's native `mock_provider "aws"` replaces provider behavior during
-`terraform test`. Nothing authenticates to AWS, reads AWS data sources, retains
+`terraform test`. Nothing authenticates to AWS, reads live AWS data, retains
 state, or applies resources. `exercise/release.yml` lives outside
 `.github/workflows`, so GitHub does not register or run it. The example registry
 hostname does not resolve locally; in the modeled system it stands in for the
@@ -34,14 +34,14 @@ reachable registry supplied by the surrounding platform.
 The supplied baseline checks formatting, syntax, basic Terraform rendering, and
 the repository's local-only boundaries: the fixture stays outside
 `.github/workflows` and `ci.yml` is the only active workflow; no live
-deployment, publishing, or cloud-login commands or actions appear in any file
-outside `exercise/`, `tests/`, and Markdown (comments and HCL strings are
-ignored; symlinks and a `GNUmakefile` or `makefile` are rejected because they
-cannot be scanned or would bypass the Makefile); Terraform declares no backend,
-cloud block, import, provisioner, remote state, or data source other than
-`aws_iam_policy_document`, and uses HCL only; every Terraform test file is
-discoverable and mocks the default `aws` provider; and no credential values are
-present. `make test` additionally runs every Python test under `tests/` and
+deployment, publishing, or cloud-login commands, actions, or `push:` inputs
+appear in any file outside `exercise/`, `tests/`, and Markdown (comments, HCL
+quoted strings, and heredocs are ignored); symlinks anywhere and a
+`GNUmakefile` or `makefile` are rejected because they cannot be scanned or would
+bypass the Makefile; no Terraform file anywhere declares a backend, cloud
+block, import, provisioner, or data source other than `aws_iam_policy_document`,
+and `infra/` uses HCL only; every Terraform test file is discoverable and mocks
+the default `aws` provider; and no credential values are present. `make test` additionally runs every Python test under `tests/` and
 every Terraform test file directly in `infra/` or `infra/tests/`. None of this
 assesses whether a proposed release design is production-ready or
 can demonstrate real registry, GitHub Actions, AWS, ECS, networking,

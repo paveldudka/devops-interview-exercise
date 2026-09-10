@@ -63,11 +63,22 @@ def test_terraform_exit_code_propagates() -> None:
     assert evaluate(summary(passed=1), 1) == 1
 
 
+@pytest.mark.parametrize("returncode", [0, 2])
 def test_non_json_output_fails_with_explanation(
-    capsys: pytest.CaptureFixture[str],
+    capsys: pytest.CaptureFixture[str], returncode: int
 ) -> None:
-    assert evaluate("Terraform v1.9.8\n" + summary(passed=1), 0) == 1
+    assert evaluate("Terraform v1.9.8\n" + summary(passed=1), returncode) != 0
     assert "non-JSON" in capsys.readouterr().err
+
+
+def test_missing_terraform_binary_is_reported(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    from run_terraform_tests import main
+
+    monkeypatch.setenv("PATH", "")
+    assert main([]) == 1
+    assert "terraform not found" in capsys.readouterr().err
 
 
 def test_diagnostics_are_shown(capsys: pytest.CaptureFixture[str]) -> None:

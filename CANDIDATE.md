@@ -73,12 +73,15 @@ make test        # run every Python and Terraform test, including yours
 The baseline must remain green. `make test` runs every Python test under
 `tests/` and every Terraform test file directly in `infra/` or `infra/tests/`
 (Terraform does not discover nested directories), including any you add, and
-fails if none run; explain their evidence and limitations. You may update
-supporting files (the Makefile, `scripts/`, the supplied tests, the
-devcontainer, `pytest.ini`, `requirements.in` and `requirements.lock`) when your
-change calls for it, and should explain why. Terraform must not gain a backend,
-remote state, or data sources other than `aws_iam_policy_document`. There is
-no hidden automated pass/fail gate for a preferred solution.
+fails if none run; explain their evidence and limitations. Terraform test files
+must declare an unaliased `mock_provider "aws"`. You may update supporting
+files (the Makefile, `scripts/`, the supplied tests, the devcontainer,
+`pytest.ini`) when your change calls for it, and should explain why. Python
+dependencies are hash-pinned in `requirements.lock`; adding one means
+regenerating that file. Terraform must stay local: no backend, cloud block,
+import or provisioner blocks, JSON syntax, or data sources that read live AWS
+state (the client-rendered `aws_iam_policy_document` is fine). There is no
+hidden automated pass/fail gate for a preferred solution.
 
 ## AI and documentation policy
 

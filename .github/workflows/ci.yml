@@ -33,7 +33,9 @@ jobs:
             | sha256sum --check
           tar -xzf /tmp/actionlint.tar.gz -C /tmp actionlint
           install /tmp/actionlint /usr/local/bin/actionlint
-      # -f on both make steps keeps a stray GNUmakefile from replacing the targets.
+      # -f on every make step keeps a stray GNUmakefile from replacing the targets.
+      - name: Initialize Terraform and verify the environment
+        run: make -f Makefile init verify-env
       - name: Run baseline checks
         run: make -f Makefile baseline
       - name: Run all tests

@@ -33,8 +33,11 @@ FAKE_PRIVATE_KEY = "-----BEGIN " + "RSA PRIVATE KEY-----"
         "docker buildx build --push -t example.invalid/worker:1 .",
         "docker buildx build \\\n  -t example.invalid/worker:1 \\\n  --push .",
         "docker buildx build --output=type=registry -t example.invalid/worker:1 .",
+        "docker buildx build -o type=image,push=true .",
+        "docker --config /tmp/x login r",
         "aws ecs update-service --cluster c --service s",
         "aws ecr get-login-password | docker login --password-stdin r",
+        "aws ecr-public get-login-password",
         "kubectl rollout restart deployment/worker",
         "helm upgrade --install worker ./chart",
         "      - uses: aws-actions/configure-aws-credentials@v4",
@@ -43,7 +46,12 @@ FAKE_PRIVATE_KEY = "-----BEGIN " + "RSA PRIVATE KEY-----"
         "          push: True",
         "          push: true # publish",
         "          push: ${{ github.event_name != 'pull_request' }}",
+        "          push: >-\n            true",
+        "          push: &p true",
         "run: docker build . && docker push x # not a comment",
+        'run: echo "build #1" && docker push x',
+        '@echo "### deploying ###" && terraform -chdir=infra apply -auto-approve',
+        "# build then push \\\n  docker push x",
         "curl https://example.invalid//x && docker push y",
     ],
 )
@@ -68,9 +76,10 @@ def test_live_automation_is_detected(snippet: str) -> None:
         "      - uses: docker/build-push-action@v6\n        with:\n          push: false",
         "          push: false # local only",
         "          push: false\r\n",
+        "          push: no",
         "# never docker push from here\nbuild:\n\tdocker build .",
-        "docker build . # CI runs terraform apply only after approval",
-        "// terraform apply happens elsewhere",
+        "docker build . # see the runbook before any terraform apply",
+        "echo ${#args} # count only",
     ],
 )
 def test_local_automation_is_allowed(snippet: str) -> None:
@@ -80,9 +89,14 @@ def test_local_automation_is_allowed(snippet: str) -> None:
 @pytest.mark.parametrize(
     "snippet",
     [
-        'description = "Digest pinned by docker push in CI"',
-        'error_message = "terraform apply must never see a mutable tag"',
+        'description = "the platform team runs docker push"',
+        'error_message = "terraform apply runs on the platform runner"',
+        'error_message = "run terraform apply # only via the platform"',
+        'description = "build #1, never terraform apply"',
         '# terraform apply is the platform\'s job\nimage = "x"',
+        "// terraform apply happens elsewhere",
+        "/*\n  The platform runs terraform apply for us.\n*/",
+        'description = <<-EOT\n  ops run terraform apply in CI\nEOT\nimage = "x"',
     ],
 )
 def test_hcl_prose_is_allowed(snippet: str) -> None:
@@ -112,7 +126,7 @@ def test_repository_scan_covers_all_but_fixture_prose_and_tests(
         path.write_text("run: terraform apply\n", encoding="utf-8")
     (tmp_path / "infra").mkdir()
     (tmp_path / "infra" / "note.tf").write_text(
-        'variable "x" {\n  description = "set by terraform apply in CI"\n}\n',
+        'variable "x" {\n  description = "set by terraform apply on the runner"\n}\n',
         encoding="utf-8",
     )
 
@@ -133,6 +147,13 @@ def test_repository_scan_flags_make_overrides_and_symlinks(tmp_path: Path) -> No
     assert find_live_automation_in_repository(tmp_path) == [
         "GNUmakefile: overrides Makefile targets",
         "scripts/elsewhere: symlink",
+    ]
+
+
+def test_lowercase_makefile_is_matched_by_exact_name(tmp_path: Path) -> None:
+    (tmp_path / "makefile").write_text("baseline:\n\t@true\n", encoding="utf-8")
+    assert find_live_automation_in_repository(tmp_path) == [
+        "makefile: overrides Makefile targets"
     ]
 
 
@@ -190,21 +211,23 @@ def test_terraform_live_declarations_are_found_recursively(tmp_path: Path) -> No
     (nested / "lookup.tf").write_text(
         'data "aws_caller_identity" "me" {}\n', encoding="utf-8"
     )
-    (nested / "state.tf").write_text(
-        'data "terraform_remote_state" "net" {}\n', encoding="utf-8"
+    (nested / "ship.tf").write_text(
+        'resource "null_resource" "ship" {\n  provisioner "local-exec" {\n'
+        '    command = "echo"\n  }\n}\n',
+        encoding="utf-8",
     )
     (tmp_path / "clean.tf").write_bytes(
-        b'# d\xe9ploy\n# backend "s3" {}\n'
+        b'# d\xe9ploy\n# backend "s3" {}\n/*\nbackend "s3" {}\n*/\n'
         b'data "aws_iam_policy_document" "assume" {}\n'
-        b'resource "aws_ecs_service" "w" {}\n'
+        b'resource "aws_ecs_service" "w" {\n'
+        b'  description = "no terraform_remote_state here"\n}\n'
     )
     (vendored / "main.tf").write_text('backend "s3" {}\n', encoding="utf-8")
 
     assert find_terraform_live_declarations(tmp_path) == [
         "main.tf: backend block",
         "modules/worker/lookup.tf: data source",
-        "modules/worker/state.tf: data source",
-        "modules/worker/state.tf: remote state",
+        "modules/worker/ship.tf: provisioner",
     ]
 
 

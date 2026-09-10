@@ -35,9 +35,12 @@ MAKE_OVERRIDES = ("GNUmakefile", "makefile")
 HCL_SUFFIXES = (".tf", ".tfvars", ".hcl")
 
 LINE_CONTINUATION = re.compile(r"\\\r?\n\s*")
-# Full-line or trailing `#`/`//` comments; not a `#` glued to a word.
-COMMENT = re.compile(r"(?:^|(?<=\s))(?:#|//).*$", re.MULTILINE)
-# Quoted HCL literals such as description and error_message prose.
+# A `#` comment, full-line or trailing, only when no quote precedes it on the
+# line; shells treat `#` inside quotes as data.
+HASH_COMMENT = re.compile(r"^([^\"'\n]*?)(?:^|(?<=\s))#.*$", re.MULTILINE)
+HCL_LINE_COMMENT = re.compile(r"^([^\"\n]*?)(?:^|(?<=\s))(?:#|//).*$", re.MULTILINE)
+HCL_BLOCK_COMMENT = re.compile(r"/\*.*?\*/", re.DOTALL)
+HCL_HEREDOC = re.compile(r"<<[-~]?(\w+)\r?\n.*?^[ \t]*\1\b", re.DOTALL | re.MULTILINE)
 HCL_STRING = re.compile(r'"(?:\\.|[^"\\\n])*"')
 
 # Commands that authenticate to, publish to, or mutate a live environment.
@@ -46,10 +49,10 @@ LIVE_COMMAND = re.compile(
     r"(?:terraform|terragrunt|tofu)(?:\s+(?:-\S+|run-all))*\s+(?:apply|destroy|import)"
     r"|(?:docker|podman|nerdctl|crane)\s+(?:image\s+|compose\s+|manifest\s+)?push"
     r"|(?:docker|podman|nerdctl)\s+(?:buildx\s+)?build\b[^\n]*\s"
-    r"(?:--push\b|--output[= ]type=registry)"
-    r"|(?:docker|podman|nerdctl)\s+login"
+    r"(?:--push\b|(?:--output[= ]|-o[= ]?)type=(?:registry|image\S*push=true))"
+    r"|(?:docker|podman|nerdctl)\s+(?:-\S+(?:\s+[^-\s]\S*)?\s+)*login"
     r"|skopeo\s+copy"
-    r"|aws\s+ecr\s+get-login-password"
+    r"|aws\s+ecr(?:-public)?\s+get-login-password"
     r"|aws\s+ecs\s+(?:update-service|register-task-definition|run-task|deploy)"
     r"|aws\s+deploy\s+"
     r"|kubectl\s+(?:apply|rollout|set|scale)"
@@ -70,10 +73,11 @@ LIVE_ACTION = re.compile(
     re.IGNORECASE,
 )
 
-# A scalar `push:` input other than a literal false, wherever it appears (for
-# example docker/build-push-action). Trigger keys carry no scalar value.
+# A `push:` input with any value other than a literal false (for example
+# docker/build-push-action). Bare and flow-style `{...}` trigger keys are not
+# inputs; block scalars and anchors are treated as values, the safe direction.
 PUBLISHING_INPUT = re.compile(
-    r"^[ \t]*push:[ \t]*(?!['\"]?false['\"]?[ \t\r]*$)[^\s{[|>&*].*$",
+    r"^[ \t]*push:[ \t]*(?!['\"]?(?:false|no|off|0)['\"]?[ \t\r]*$)[^\s{].*$",
     re.MULTILINE | re.IGNORECASE,
 )
 
@@ -89,8 +93,8 @@ SECRET_PATTERNS = {
     "private key": re.compile(r"-----BEGIN (?:[A-Z]+ )?PRIVATE KEY-----"),
 }
 
-# Terraform declarations that reach a backend, live data, or a live host.
-# aws_iam_policy_document is rendered client-side and stays allowed.
+# Terraform block declarations that reach a backend, live data, or a live
+# host. aws_iam_policy_document is rendered client-side and stays allowed.
 TERRAFORM_LIVE_DECLARATIONS = {
     "backend block": re.compile(r'^\s*backend\s+"', re.MULTILINE),
     "cloud block": re.compile(r"^\s*cloud\s*{", re.MULTILINE),
@@ -99,7 +103,6 @@ TERRAFORM_LIVE_DECLARATIONS = {
     ),
     "import block": re.compile(r"^\s*import\s*{", re.MULTILINE),
     "provisioner": re.compile(r'^\s*provisioner\s+"', re.MULTILINE),
-    "remote state": re.compile(r"terraform_remote_state"),
 }
 
 REAL_PROVIDER_BLOCK = re.compile(r'^\s*provider\s+"aws"', re.MULTILINE)
@@ -121,10 +124,19 @@ def read_text(path: Path) -> str:
     return data.decode("utf-8", errors="replace")
 
 
+def strip_hcl_comments(text: str) -> str:
+    return HCL_LINE_COMMENT.sub(r"\1", HCL_BLOCK_COMMENT.sub("", text))
+
+
 def strip_prose(text: str, *, hcl: bool = False) -> str:
-    """Drop comments, and HCL string literals, so prose cannot look like a command."""
-    text = COMMENT.sub("", text)
-    return HCL_STRING.sub('""', text) if hcl else text
+    """Drop comments; for HCL also heredocs and quoted strings, so prose cannot
+    look like a command. Shell and YAML keep their quoted strings."""
+    if not hcl:
+        return HASH_COMMENT.sub(r"\1", text)
+    text = HCL_BLOCK_COMMENT.sub("", text)
+    text = HCL_HEREDOC.sub('""', text)
+    text = HCL_STRING.sub('""', text)
+    return HCL_LINE_COMMENT.sub(r"\1", text)
 
 
 def repository_files(root: Path) -> list[Path]:
@@ -156,7 +168,7 @@ def find_secrets(root: Path) -> list[str]:
 
 def find_live_automation(text: str, *, hcl: bool = False) -> list[str]:
     """Live deployment commands or actions in one automation file."""
-    joined = strip_prose(LINE_CONTINUATION.sub(" ", text), hcl=hcl)
+    joined = LINE_CONTINUATION.sub(" ", strip_prose(text, hcl=hcl))
     matches = [match.group(0) for match in LIVE_COMMAND.finditer(joined)]
     matches.extend(match.group(0) for match in LIVE_ACTION.finditer(joined))
     matches.extend(
@@ -186,26 +198,25 @@ def find_live_automation_in_repository(root: Path) -> list[str]:
     return findings
 
 
-def terraform_files(infra: Path, pattern: str) -> list[Path]:
-    return [
-        path for path in sorted(infra.rglob(pattern)) if not is_ignored(path, infra)
-    ]
+def terraform_files(root: Path, pattern: str) -> list[Path]:
+    return [path for path in sorted(root.rglob(pattern)) if not is_ignored(path, root)]
 
 
-def find_terraform_live_declarations(infra: Path) -> list[str]:
+def find_terraform_live_declarations(root: Path) -> list[str]:
+    """Live declarations in every Terraform file under root, comments removed."""
     findings: list[str] = []
-    for path in terraform_files(infra, "*.tf") + terraform_files(infra, "*.tftest.hcl"):
-        content = COMMENT.sub("", read_text(path))
+    for path in terraform_files(root, "*.tf") + terraform_files(root, "*.tftest.hcl"):
+        content = strip_hcl_comments(read_text(path))
         for label, pattern in TERRAFORM_LIVE_DECLARATIONS.items():
             if pattern.search(content):
-                findings.append(f"{path.relative_to(infra)}: {label}")
+                findings.append(f"{path.relative_to(root)}: {label}")
     return findings
 
 
 def find_unmocked_terraform_tests(infra: Path) -> list[str]:
     findings: list[str] = []
     for path in terraform_files(infra, "*.tftest.hcl"):
-        content = COMMENT.sub("", read_text(path))
+        content = strip_hcl_comments(read_text(path))
         if not DEFAULT_MOCK_PROVIDER_BLOCK.search(content):
             findings.append(f'{path.relative_to(infra)}: missing mock_provider "aws"')
         if REAL_PROVIDER_BLOCK.search(content):

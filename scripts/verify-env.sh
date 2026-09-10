@@ -2,7 +2,7 @@
 set -euo pipefail
 
 missing=0
-for command_name in terraform actionlint python; do
+for command_name in make terraform actionlint python; do
   if ! command -v "${command_name}" >/dev/null 2>&1; then
     echo "missing required command: ${command_name}" >&2
     missing=1
@@ -45,14 +45,14 @@ python -m ruff --version >/dev/null || {
 }
 
 # The AWS provider download is large; it must not eat into the timed exercise.
-# validate is offline; it fails on a missing or partial provider and on any
-# configuration error, so show its diagnostics and only suggest init when apt.
+# validate is offline; it fails on a missing, partial, or mismatched provider
+# and on any configuration error, so show its diagnostics and classify.
 if ! validate_output="$(terraform -chdir=infra validate -no-color 2>&1)"; then
   echo "${validate_output}" >&2
-  if grep -qiE 'no package for|missing required provider|terraform init' <<<"${validate_output}"; then
-    echo "Terraform providers are not initialized; run: make init" >&2
+  if grep -qiE 'no package for|does not match any of the checksums|missing required provider|\.terraform/providers|terraform init|module not installed' <<<"${validate_output}"; then
+    echo "Terraform providers or modules are not initialized; run: make init" >&2
   else
-    echo "infra/ does not validate; fix the errors above (make init will not help)" >&2
+    echo "infra/ does not validate; this looks like a configuration error, see the diagnostics above" >&2
   fi
   exit 1
 fi

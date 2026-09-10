@@ -29,26 +29,31 @@ def evaluate(stdout: str, returncode: int) -> int:
             unexpected.append(line)
             continue
         kind = event.get("type")
-        if kind == "test_run" and event["test_run"].get("progress") == "complete":
+        if (
+            kind == "test_run"
+            and event.get("test_run", {}).get("progress") == "complete"
+        ):
             run = event["test_run"]
             print(
                 f'{run.get("path", "?")}: run "{run.get("run", "?")}" '
                 f"{run.get('status', 'unknown')}"
             )
         elif kind == "diagnostic":
-            diagnostic = event["diagnostic"]
+            diagnostic = event.get("diagnostic", {})
+            where = diagnostic.get("range", {})
+            location = (
+                f"{where.get('filename', '')}:{where.get('start', {}).get('line', '')}"
+            )
             print(
-                f"{diagnostic.get('severity', 'error')}: {diagnostic.get('summary', '')}",
+                f"{diagnostic.get('severity', 'error')}: {diagnostic.get('summary', '')}"
+                f"{f' ({location})' if location != ':' else ''}",
                 file=sys.stderr,
             )
             if diagnostic.get("detail"):
                 print(diagnostic["detail"], file=sys.stderr)
         elif kind == "test_summary":
-            summary = event["test_summary"]
+            summary = event.get("test_summary", {})
 
-    if returncode != 0:
-        print(f"terraform test exited with {returncode}", file=sys.stderr)
-        return returncode
     if unexpected:
         print(
             "unexpected non-JSON output from terraform test (wrapper enabled?):",
@@ -56,6 +61,10 @@ def evaluate(stdout: str, returncode: int) -> int:
             sep="\n",
             file=sys.stderr,
         )
+    if returncode != 0:
+        print(f"terraform test exited with {returncode}", file=sys.stderr)
+        return returncode
+    if unexpected:
         return 1
     if summary is None:
         print("terraform test produced no summary", file=sys.stderr)
