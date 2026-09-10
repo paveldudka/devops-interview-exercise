@@ -7,7 +7,7 @@
       "ACTIONLINT_VERSION": "1.7.7"
     }
   },
-  "postCreateCommand": "python -m pip install --disable-pip-version-check --require-hashes -r requirements.lock && make verify-env",
+  "postCreateCommand": "python -m pip install --disable-pip-version-check --require-hashes -r requirements.lock && make init && make verify-env",
   "customizations": {
     "vscode": {
       "extensions": [

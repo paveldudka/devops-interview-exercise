@@ -32,8 +32,11 @@ reachable registry supplied by the surrounding platform.
 ## What local validation cannot prove
 
 The supplied baseline checks formatting, syntax, basic Terraform rendering, and
-the repository's local-only boundaries. They do not assess whether a proposed
-release design is production-ready and cannot demonstrate real registry,
-GitHub Actions, AWS, ECS, networking, application, observability, or traffic
-behavior. Candidates should explain the evidence their own validation provides
-and the uncertainty that remains.
+the repository's local-only boundaries: no live deployment commands or actions
+in active workflows or repository automation, no Terraform backend, data
+source, or remote state, mocked providers in Terraform tests, and no credential
+values. `make test` additionally runs every Python and Terraform test present.
+None of this assesses whether a proposed release design is production-ready or
+can demonstrate real registry, GitHub Actions, AWS, ECS, networking,
+application, observability, or traffic behavior. Candidates should explain the
+evidence their own validation provides and the uncertainty that remains.

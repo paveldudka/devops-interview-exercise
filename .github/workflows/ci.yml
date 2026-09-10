@@ -35,3 +35,5 @@ jobs:
           install /tmp/actionlint /usr/local/bin/actionlint
       - name: Run baseline checks
         run: make baseline
+      - name: Run all tests
+        run: make test

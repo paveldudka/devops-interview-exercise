@@ -29,6 +29,7 @@ if not (3, 12) <= sys.version_info[:2] < (3, 13):
     raise SystemExit(f"Python >=3.12,<3.13 is required; found {sys.version.split()[0]}")
 try:
     import pytest  # noqa: F401
+    import ruff  # noqa: F401
     import yaml  # noqa: F401
 except ImportError as error:
     raise SystemExit(
@@ -36,7 +37,19 @@ except ImportError as error:
     ) from error
 PY
 
+python -m ruff --version >/dev/null || {
+  echo "ruff is not runnable; run: pip install --require-hashes -r requirements.lock" >&2
+  exit 1
+}
+
+# The AWS provider download is large; it must not eat into the timed exercise.
+if [[ ! -d infra/.terraform/providers ]]; then
+  echo "Terraform providers are not initialized; run: make init" >&2
+  exit 1
+fi
+
 echo "terraform ${terraform_version}"
-actionlint -version
+actionlint -version | head -n 1
 python --version
+python -m ruff --version
 echo "environment ready"

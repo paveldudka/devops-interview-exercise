@@ -1,7 +1,7 @@
 SHELL := /bin/bash
 .SHELLFLAGS := -eu -o pipefail -c
 
-.PHONY: verify-env init format-check baseline
+.PHONY: verify-env init format-check baseline test
 
 verify-env:
 	@./scripts/verify-env.sh
@@ -12,12 +12,18 @@ init:
 format-check:
 	@terraform fmt -check -recursive infra
 	@actionlint -color exercise/release.yml .github/workflows/ci.yml
-	@python -m ruff check tests
-	@python -m ruff format --check tests
-	@python -m pytest --collect-only -q >/dev/null
+	@python -m ruff check .
+	@python -m ruff format --check .
+	@python -m pytest --collect-only -qq
 
+# Supplied environment and boundary proof. Not a solution grade.
+# pytest exits non-zero when the baseline marker selects nothing.
 baseline: init format-check
 	@terraform -chdir=infra validate
-	@test -f infra/tests/baseline.tftest.hcl
-	@terraform -chdir=infra test -filter=tests/baseline.tftest.hcl
+	@python scripts/terraform_test.py -filter=tests/baseline.tftest.hcl
 	@python -m pytest -q -m baseline
+
+# Every Python test under tests/ and every Terraform test under infra/tests.
+test: init
+	@python scripts/terraform_test.py
+	@python -m pytest -q

@@ -15,12 +15,15 @@ devcontainer, then run:
 ```bash
 make verify-env
 make baseline
+make test
 ```
 
-The baseline checks only the repository's formatting, syntax, basic Terraform
-model, inactive workflow boundary, and absence of live-cloud dependencies. It
-does not grade a candidate's proposed solution, and there is no hidden automated
-pass/fail gate.
+The devcontainer's post-create step installs dependencies and initializes the
+Terraform provider before `make verify-env` runs. The baseline checks only the
+repository's formatting, syntax, basic Terraform model, inactive workflow
+boundary, and absence of live-cloud dependencies. `make test` runs every Python
+and Terraform test, including candidate-authored ones. Neither grades a
+candidate's proposed solution, and there is no hidden automated pass/fail gate.
 
 See [docs/architecture.md](docs/architecture.md) for the model, mocking, and
 local-validation boundaries.

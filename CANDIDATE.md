@@ -17,8 +17,9 @@ communication—not the number of findings or lines changed.
 - [`exercise/release.yml`](exercise/release.yml) models a GitHub Actions release
   of a worker through staging and production.
 - [`infra/`](infra/) models the relevant ECS task definition and service. The
-  surrounding network, cluster, IAM, and registry infrastructure already exist
-  and are supplied as variables.
+  surrounding network, cluster, and IAM infrastructure already exist and are
+  referenced through variables; the container registry is supplied by the
+  platform.
 - The release workflow is an inactive fixture outside `.github/workflows/`.
 - Local validation uses a mocked Terraform provider. It does not access an AWS
   account, credential, remote backend, state, or live deployment.
@@ -41,9 +42,10 @@ boundaries.
 4. Describe how you would roll the change out, roll it back, and address the
    most important residual risks.
 
-You may change `exercise/release.yml`, `infra/`, and `NOTES.md`, and may add
-focused tests or supporting code. Keep the workflow inactive and do not add AWS
-credentials, a remote backend, or a real deployment path.
+You may change the release fixture, `infra/`, the worker's `Dockerfile` and
+`worker.py`, `tests/`, and `NOTES.md`, and may add focused tests or supporting
+code. Keep the workflow inactive and do not add AWS credentials, a remote
+backend, or a real deployment path.
 
 ## Timing (75 minutes)
 
@@ -56,15 +58,21 @@ credentials, a remote backend, or a real deployment path.
 
 Use the included devcontainer. Docker plus a devcontainer-capable editor or CLI
 are the only host prerequisites; initial setup should take under 10 minutes.
+The devcontainer's post-create step installs the Python dependencies, runs
+`make init` to download the Terraform AWS provider (no credentials are needed),
+and then runs `make verify-env`. The 75-minute timer starts only after that
+setup and `make verify-env` have succeeded, so the provider download never
+counts against your time.
 
 ```bash
-make verify-env  # confirm the supported toolchain is available
+make verify-env  # confirm the supported toolchain is ready
 make baseline    # check formatting, syntax, and the local model boundaries
+make test        # run every Python test in tests/ and Terraform test in infra/tests
 ```
 
-The baseline must remain green. You may add your own focused tests and should
-explain their evidence and limitations. If your improvement deliberately
-tightens an interface, you may update the relevant supplied test fixture and
+The baseline must remain green. `make test` runs all tests, including any you
+add, and fails if none run; explain their evidence and limitations. You may
+update supporting files and tests when your change calls for it, and should
 explain why. There is no hidden automated pass/fail gate for a preferred
 solution.
 
