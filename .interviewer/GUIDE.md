@@ -278,7 +278,7 @@ From a trusted local checkout of the canonical repository:
 
 ```bash
 canonical_repo=/absolute/path/to/devops-interview-exercise
-candidate_ref=origin/pasha/build-interview-exercise
+candidate_ref=origin/main
 candidate_id=<opaque-id>
 snapshot_dir="$(mktemp -d)"
 
