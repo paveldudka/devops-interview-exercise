@@ -1,0 +1,42 @@
+name: Repository validation
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  baseline:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements.lock
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.9.8"
+          terraform_wrapper: false
+      - name: Install Python dependencies
+        run: python -m pip install --require-hashes --requirement requirements.lock
+      - name: Install actionlint
+        run: |
+          curl --fail --show-error --location --retry 3 \
+            https://github.com/rhysd/actionlint/releases/download/v1.7.7/actionlint_1.7.7_linux_amd64.tar.gz \
+            --output /tmp/actionlint.tar.gz
+          echo "023070a287cd8cccd71515fedc843f1985bf96c436b7effaecce67290e7e0757  /tmp/actionlint.tar.gz" \
+            | sha256sum --check
+          tar -xzf /tmp/actionlint.tar.gz -C /tmp actionlint
+          install /tmp/actionlint /usr/local/bin/actionlint
+      # -f on every make step keeps a stray GNUmakefile from replacing the targets.
+      - name: Initialize Terraform and verify the environment
+        run: make -f Makefile init verify-env
+      - name: Run baseline checks
+        run: make -f Makefile baseline
+      - name: Run all tests
+        run: make -f Makefile test

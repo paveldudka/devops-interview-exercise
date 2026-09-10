@@ -1,0 +1,20 @@
+{
+  "name": "ecs-release-review",
+  "build": {
+    "dockerfile": "Dockerfile",
+    "args": {
+      "TERRAFORM_VERSION": "1.9.8",
+      "ACTIONLINT_VERSION": "1.7.7"
+    }
+  },
+  "postCreateCommand": "python -m pip install --disable-pip-version-check --require-hashes -r requirements.lock && make init && make verify-env",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "hashicorp.terraform",
+        "redhat.vscode-yaml"
+      ]
+    }
+  },
+  "remoteUser": "vscode"
+}
